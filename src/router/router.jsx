@@ -4,7 +4,12 @@ import PrivateRoute from "../components/route/PrivateRoute";
 import VolunteerRoute from "../components/route/VolunteerRoute";
 import DashboardLayout from "../layouts/DashboardLayout";
 import MainLayout from "../layouts/MainLayout";
+import AllBloodDonationRequests from "../pages/dashboard/AllBloodDonationRequests";
+import AllUsers from "../pages/dashboard/AllUsers";
+import CreateDonationRequest from "../pages/dashboard/CreateDonationRequest";
 import DashboardHome from "../pages/dashboard/DashboardHome";
+import MyDonationRequests from "../pages/dashboard/MyDonationRequests";
+import Profile from "../pages/dashboard/Profile";
 import ComingSoon from "../pages/shared/ComingSoon";
 
 const router = createBrowserRouter([
@@ -60,21 +65,21 @@ const router = createBrowserRouter([
       },
       {
         path: "profile",
-        element: <ComingSoon title="Profile Page" />,
+        element: <Profile />,
       },
       {
         path: "create-donation-request",
-        element: <ComingSoon title="Create Donation Request" />,
+        element: <CreateDonationRequest />,
       },
       {
         path: "my-donation-requests",
-        element: <ComingSoon title="My Donation Requests" />,
+        element: <MyDonationRequests />,
       },
       {
         path: "all-users",
         element: (
           <AdminRoute>
-            <ComingSoon title="All Users" />
+            <AllUsers />
           </AdminRoute>
         ),
       },
@@ -82,7 +87,7 @@ const router = createBrowserRouter([
         path: "all-blood-donation-request",
         element: (
           <VolunteerRoute>
-            <ComingSoon title="All Blood Donation Requests" />
+            <AllBloodDonationRequests />
           </VolunteerRoute>
         ),
       },
