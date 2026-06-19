@@ -1,4 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
+import AdminRoute from "../components/route/AdminRoute";
+import PrivateRoute from "../components/route/PrivateRoute";
+import VolunteerRoute from "../components/route/VolunteerRoute";
 import DashboardLayout from "../layouts/DashboardLayout";
 import MainLayout from "../layouts/MainLayout";
 import ComingSoon from "../pages/shared/ComingSoon";
@@ -18,7 +21,11 @@ const router = createBrowserRouter([
       },
       {
         path: "donation-requests/:id",
-        element: <ComingSoon title="Donation Request Details" />,
+        element: (
+          <PrivateRoute>
+            <ComingSoon title="Donation Request Details" />
+          </PrivateRoute>
+        ),
       },
       {
         path: "search",
@@ -40,7 +47,11 @@ const router = createBrowserRouter([
   },
   {
     path: "/dashboard",
-    element: <DashboardLayout />,
+    element: (
+      <PrivateRoute>
+        <DashboardLayout />
+      </PrivateRoute>
+    ),
     children: [
       {
         index: true,
@@ -60,11 +71,19 @@ const router = createBrowserRouter([
       },
       {
         path: "all-users",
-        element: <ComingSoon title="All Users" />,
+        element: (
+          <AdminRoute>
+            <ComingSoon title="All Users" />
+          </AdminRoute>
+        ),
       },
       {
         path: "all-blood-donation-request",
-        element: <ComingSoon title="All Blood Donation Requests" />,
+        element: (
+          <VolunteerRoute>
+            <ComingSoon title="All Blood Donation Requests" />
+          </VolunteerRoute>
+        ),
       },
     ],
   },
