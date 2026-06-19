@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import BloodBadge from "../../components/common/BloodBadge";
 import Button from "../../components/common/Button";
 import EmptyState from "../../components/common/EmptyState";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
+import { DEFAULT_AVATAR } from "../../utils/constants";
 import confirmModal from "../../utils/confirmModal";
 
 const initialUsers = [
@@ -12,9 +12,7 @@ const initialUsers = [
     id: "USR-1001",
     name: "Nusrat Jahan",
     email: "nusrat@example.com",
-    bloodGroup: "A+",
-    district: "Dhaka",
-    upazila: "Dhanmondi",
+    avatar: DEFAULT_AVATAR,
     role: "donor",
     status: "active",
   },
@@ -22,9 +20,7 @@ const initialUsers = [
     id: "USR-1002",
     name: "Mehedi Hasan",
     email: "mehedi@example.com",
-    bloodGroup: "O-",
-    district: "Chattogram",
-    upazila: "Panchlaish",
+    avatar: DEFAULT_AVATAR,
     role: "volunteer",
     status: "active",
   },
@@ -32,9 +28,7 @@ const initialUsers = [
     id: "USR-1003",
     name: "Sadia Rahman",
     email: "sadia@example.com",
-    bloodGroup: "B+",
-    district: "Sylhet",
-    upazila: "Sylhet Sadar",
+    avatar: DEFAULT_AVATAR,
     role: "donor",
     status: "blocked",
   },
@@ -42,16 +36,23 @@ const initialUsers = [
     id: "USR-1004",
     name: "Admin User",
     email: "admin@scaffold.com",
-    bloodGroup: "AB+",
-    district: "Dhaka",
-    upazila: "Gulshan",
+    avatar: DEFAULT_AVATAR,
     role: "admin",
     status: "active",
   },
 ];
 
+const statusFilters = ["all", "active", "blocked"];
+
 const AllUsers = () => {
   const [users, setUsers] = useState(initialUsers);
+  const [activeFilter, setActiveFilter] = useState("all");
+
+  const filteredUsers = useMemo(() => {
+    if (activeFilter === "all") return users;
+
+    return users.filter((user) => user.status === activeFilter);
+  }, [activeFilter, users]);
 
   const handleRoleChange = async (userId, role) => {
     const confirmed = await confirmModal({
@@ -69,7 +70,7 @@ const AllUsers = () => {
       )
     );
 
-    toast.success("User role updated successfully.");
+    toast.success(`User role updated to ${role}.`);
   };
 
   const handleStatusChange = async (userId, status) => {
@@ -88,15 +89,15 @@ const AllUsers = () => {
       )
     );
 
-    toast.success("User status updated successfully.");
+    toast.success(`User status updated to ${status}.`);
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Admin Panel"
-        title="Manage platform users"
-        description="Review donors, volunteers and admins. Update roles or block/unblock users from a secure admin table."
+        title="Manage all platform users"
+        description="Filter users by account status and manage user role or access from one admin table."
         icon="group"
       />
 
@@ -114,15 +115,46 @@ const AllUsers = () => {
         />
       </section>
 
+      <section className="sc-card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-xl font-extrabold tracking-tight text-ink">
+              Filter Users
+            </h2>
+
+            <p className="mt-1 text-sm font-semibold text-ink-muted">
+              Filter user list by active or blocked status.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {statusFilters.map((status) => (
+              <Button
+                key={status}
+                size="sm"
+                variant={activeFilter === status ? "primary" : "secondary"}
+                onClick={() => setActiveFilter(status)}
+              >
+                {status === "all"
+                  ? "All"
+                  : status.charAt(0).toUpperCase() + status.slice(1)}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="sc-card overflow-hidden">
         <div className="border-b border-surface-border p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-extrabold tracking-tight text-ink">
-                User List
+                User Management Table
               </h2>
+
               <p className="mt-1 text-sm font-semibold text-ink-muted">
-                Admin can manage role and account status from here.
+                Showing {filteredUsers.length} user account
+                {filteredUsers.length === 1 ? "" : "s"}.
               </p>
             </div>
 
@@ -130,12 +162,12 @@ const AllUsers = () => {
           </div>
         </div>
 
-        {users.length === 0 ? (
+        {filteredUsers.length === 0 ? (
           <div className="p-5 sm:p-6">
             <EmptyState
               icon="group_off"
               title="No users found"
-              description="No registered user data is available yet."
+              description="No user matched your selected status filter."
             />
           </div>
         ) : (
@@ -143,45 +175,36 @@ const AllUsers = () => {
             <table className="table">
               <thead>
                 <tr className="border-surface-border text-xs uppercase tracking-[0.12em] text-ink-muted">
-                  <th>User</th>
-                  <th>Blood</th>
-                  <th>Location</th>
-                  <th>Role</th>
-                  <th>Status</th>
+                  <th>Avatar</th>
+                  <th>User Email</th>
+                  <th>User Name</th>
+                  <th>User Role</th>
+                  <th>User Status</th>
                   <th className="text-right">Admin Actions</th>
                 </tr>
               </thead>
 
               <tbody>
-                {users.map((user) => (
+                {filteredUsers.map((user) => (
                   <tr key={user.id} className="border-surface-border">
                     <td>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-tint text-primary">
-                          <span className="material-symbols-rounded">
-                            person
-                          </span>
-                        </div>
-
-                        <div>
-                          <p className="font-extrabold text-ink">
-                            {user.name}
-                          </p>
-                          <p className="text-xs font-semibold text-ink-muted">
-                            {user.email}
-                          </p>
-                        </div>
-                      </div>
+                      <img
+                        src={user.avatar || DEFAULT_AVATAR}
+                        alt={user.name}
+                        className="h-12 w-12 rounded-[18px] object-cover shadow-sm"
+                      />
                     </td>
 
                     <td>
-                      <BloodBadge group={user.bloodGroup} size="sm" />
+                      <p className="text-sm font-semibold text-ink-muted">
+                        {user.email}
+                      </p>
                     </td>
 
                     <td>
-                      <p className="font-bold text-ink">{user.district}</p>
+                      <p className="font-extrabold text-ink">{user.name}</p>
                       <p className="text-xs font-semibold text-ink-muted">
-                        {user.upazila}
+                        ID: {user.id}
                       </p>
                     </td>
 
@@ -195,26 +218,6 @@ const AllUsers = () => {
 
                     <td>
                       <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon="volunteer_activism"
-                          disabled={user.role === "volunteer"}
-                          onClick={() => handleRoleChange(user.id, "volunteer")}
-                        >
-                          Volunteer
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="dark"
-                          icon="admin_panel_settings"
-                          disabled={user.role === "admin"}
-                          onClick={() => handleRoleChange(user.id, "admin")}
-                        >
-                          Admin
-                        </Button>
-
                         {user.status === "active" ? (
                           <Button
                             size="sm"
@@ -236,6 +239,39 @@ const AllUsers = () => {
                             }
                           >
                             Unblock
+                          </Button>
+                        )}
+
+                        {user.role === "donor" ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon="volunteer_activism"
+                            onClick={() =>
+                              handleRoleChange(user.id, "volunteer")
+                            }
+                          >
+                            Make Volunteer
+                          </Button>
+                        ) : null}
+
+                        {user.role !== "admin" ? (
+                          <Button
+                            size="sm"
+                            variant="dark"
+                            icon="admin_panel_settings"
+                            onClick={() => handleRoleChange(user.id, "admin")}
+                          >
+                            Make Admin
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon="admin_panel_settings"
+                            disabled
+                          >
+                            Admin
                           </Button>
                         )}
                       </div>

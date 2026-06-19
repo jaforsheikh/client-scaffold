@@ -1,4 +1,5 @@
 import { createBrowserRouter } from "react-router-dom";
+import ActiveRoute from "../components/route/ActiveRoute";
 import AdminRoute from "../components/route/AdminRoute";
 import PrivateRoute from "../components/route/PrivateRoute";
 import VolunteerRoute from "../components/route/VolunteerRoute";
@@ -12,11 +13,13 @@ import CreateDonationRequest from "../pages/dashboard/CreateDonationRequest";
 import DashboardHome from "../pages/dashboard/DashboardHome";
 import MyDonationRequests from "../pages/dashboard/MyDonationRequests";
 import Profile from "../pages/dashboard/Profile";
+import UpdateDonationRequest from "../pages/dashboard/UpdateDonationRequest";
 import DonationRequestDetails from "../pages/public/DonationRequestDetails";
 import DonationRequests from "../pages/public/DonationRequests";
 import Funding from "../pages/public/Funding";
 import Home from "../pages/public/Home";
 import Search from "../pages/public/Search";
+import NotFound from "../pages/shared/NotFound";
 
 const router = createBrowserRouter([
   {
@@ -59,6 +62,10 @@ const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
+      {
+        path: "*",
+        element: <NotFound />,
+      },
     ],
   },
   {
@@ -79,7 +86,15 @@ const router = createBrowserRouter([
       },
       {
         path: "create-donation-request",
-        element: <CreateDonationRequest />,
+        element: (
+          <ActiveRoute>
+            <CreateDonationRequest />
+          </ActiveRoute>
+        ),
+      },
+      {
+        path: "update-donation-request/:id",
+        element: <UpdateDonationRequest />,
       },
       {
         path: "my-donation-requests",
@@ -100,6 +115,10 @@ const router = createBrowserRouter([
             <AllBloodDonationRequests />
           </VolunteerRoute>
         ),
+      },
+      {
+        path: "*",
+        element: <NotFound />,
       },
     ],
   },

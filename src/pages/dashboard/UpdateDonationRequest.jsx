@@ -1,17 +1,21 @@
 import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
+import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import Button from "../../components/common/Button";
+import EmptyState from "../../components/common/EmptyState";
 import FormError from "../../components/common/FormError";
 import PageHeader from "../../components/common/PageHeader";
-import useAuth from "../../hooks/useAuth";
 import useLocationData from "../../hooks/useLocationData";
+import { recentDonationRequests } from "../../data/dashboardMockData";
 import { BLOOD_GROUPS } from "../../utils/constants";
 import { getTodayDate } from "../../utils/dateFormatter";
 
-const CreateDonationRequest = () => {
-  const { user, dbUser } = useAuth();
+const UpdateDonationRequest = () => {
+  const { id } = useParams();
   const { districts, loading, getUpazilasByDistrict } = useLocationData();
+
+  const request = recentDonationRequests.find((item) => item.id === id);
 
   const {
     register,
@@ -35,28 +39,42 @@ const CreateDonationRequest = () => {
     },
   });
 
-  useEffect(() => {
-    reset({
-      requesterName: dbUser?.name || user?.displayName || "",
-      requesterEmail: dbUser?.email || user?.email || "",
-      recipientName: "",
-      recipientDistrictId: "",
-      recipientUpazilaId: "",
-      hospitalName: "",
-      fullAddress: "",
-      bloodGroup: "",
-      donationDate: "",
-      donationTime: "",
-      requestMessage: "",
-    });
-  }, [dbUser, user, reset]);
-
   const selectedDistrictId = watch("recipientDistrictId");
 
   const filteredUpazilas = useMemo(
     () => getUpazilasByDistrict(selectedDistrictId),
     [getUpazilasByDistrict, selectedDistrictId]
   );
+
+  useEffect(() => {
+    if (!request || districts.length === 0) return;
+
+    const matchedDistrict = districts.find(
+      (district) => district.name === request.district
+    );
+
+    const matchedUpazilas = matchedDistrict
+      ? getUpazilasByDistrict(matchedDistrict.id)
+      : [];
+
+    const matchedUpazila = matchedUpazilas.find(
+      (upazila) => upazila.name === request.upazila
+    );
+
+    reset({
+      requesterName: request.requesterName || "",
+      requesterEmail: request.requesterEmail || "",
+      recipientName: request.recipientName || "",
+      recipientDistrictId: matchedDistrict?.id || "",
+      recipientUpazilaId: matchedUpazila?.id || "",
+      hospitalName: request.hospitalName || "",
+      fullAddress: request.fullAddress || "",
+      bloodGroup: request.bloodGroup || "",
+      donationDate: request.donationDate || "",
+      donationTime: request.donationTime || "",
+      requestMessage: request.requestMessage || "",
+    });
+  }, [districts, getUpazilasByDistrict, request, reset]);
 
   const onSubmit = async (data) => {
     const selectedDistrict = districts.find(
@@ -67,7 +85,8 @@ const CreateDonationRequest = () => {
       (upazila) => String(upazila.id) === String(data.recipientUpazilaId)
     );
 
-    const donationRequest = {
+    const updatedDonationRequest = {
+      id: request.id,
       requesterName: data.requesterName,
       requesterEmail: data.requesterEmail,
       recipientName: data.recipientName,
@@ -81,39 +100,46 @@ const CreateDonationRequest = () => {
       donationDate: data.donationDate,
       donationTime: data.donationTime,
       requestMessage: data.requestMessage,
-      status: "pending",
-      donationStatus: "pending",
-      donorName: "",
-      donorEmail: "",
-      createdAt: new Date().toISOString(),
+      status: request.status,
+      donorName: request.donorName || "",
+      donorEmail: request.donorEmail || "",
+      updatedAt: new Date().toISOString(),
     };
 
-    console.log("Donation Request:", donationRequest);
+    console.log("Updated Donation Request:", updatedDonationRequest);
 
-    toast.success("Donation request created successfully.");
-
-    reset({
-      requesterName: dbUser?.name || user?.displayName || "",
-      requesterEmail: dbUser?.email || user?.email || "",
-      recipientName: "",
-      recipientDistrictId: "",
-      recipientUpazilaId: "",
-      hospitalName: "",
-      fullAddress: "",
-      bloodGroup: "",
-      donationDate: "",
-      donationTime: "",
-      requestMessage: "",
-    });
+    toast.success("Donation request updated successfully.");
   };
+
+  if (!request) {
+    return (
+      <EmptyState
+        icon="search_off"
+        title="Donation request not found"
+        description="The request you want to update is not available."
+        action={
+          <Link to="/dashboard/my-donation-requests">
+            <Button icon="arrow_back">Back to My Requests</Button>
+          </Link>
+        }
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Create Request"
-        title="Create a blood donation request"
-        description="Submit accurate recipient, hospital, blood group, date and location information so donors can respond faster."
-        icon="add_circle"
+        eyebrow={`Update Request: ${request.id}`}
+        title="Update blood donation request"
+        description="Edit recipient, hospital, location, blood group, date, time and request message information."
+        icon="edit"
+        action={
+          <Link to="/dashboard/my-donation-requests">
+            <Button variant="secondary" icon="arrow_back">
+              Back
+            </Button>
+          </Link>
+        }
       />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -122,8 +148,9 @@ const CreateDonationRequest = () => {
             <h2 className="text-xl font-extrabold tracking-tight text-ink">
               Requester Information
             </h2>
+
             <p className="mt-1 text-sm font-semibold text-ink-muted">
-              Requester name and email are locked from your logged-in account.
+              Requester name and email remain read-only.
             </p>
           </div>
 
@@ -134,7 +161,6 @@ const CreateDonationRequest = () => {
                 type="text"
                 className="sc-input mt-2 bg-surface-soft"
                 readOnly
-                placeholder="Logged in user name"
                 {...register("requesterName", {
                   required: "Requester name is required.",
                 })}
@@ -148,7 +174,6 @@ const CreateDonationRequest = () => {
                 type="email"
                 className="sc-input mt-2 bg-surface-soft"
                 readOnly
-                placeholder="Logged in user email"
                 {...register("requesterEmail", {
                   required: "Requester email is required.",
                 })}
@@ -161,10 +186,11 @@ const CreateDonationRequest = () => {
         <section className="sc-card overflow-hidden">
           <div className="border-b border-surface-border p-5 sm:p-6">
             <h2 className="text-xl font-extrabold tracking-tight text-ink">
-              Recipient & Hospital Details
+              Donation Request Details
             </h2>
+
             <p className="mt-1 text-sm font-semibold text-ink-muted">
-              Add clear patient and hospital information for the donor.
+              Update the request information carefully.
             </p>
           </div>
 
@@ -316,32 +342,9 @@ const CreateDonationRequest = () => {
           </div>
         </section>
 
-        <div className="flex flex-col justify-end gap-3 sm:flex-row">
-          <Button
-            type="button"
-            variant="secondary"
-            icon="restart_alt"
-            onClick={() =>
-              reset({
-                requesterName: dbUser?.name || user?.displayName || "",
-                requesterEmail: dbUser?.email || user?.email || "",
-                recipientName: "",
-                recipientDistrictId: "",
-                recipientUpazilaId: "",
-                hospitalName: "",
-                fullAddress: "",
-                bloodGroup: "",
-                donationDate: "",
-                donationTime: "",
-                requestMessage: "",
-              })
-            }
-          >
-            Reset Form
-          </Button>
-
-          <Button type="submit" icon="send" loading={isSubmitting}>
-            Request
+        <div className="flex justify-end">
+          <Button type="submit" icon="save" loading={isSubmitting}>
+            Update Donation Request
           </Button>
         </div>
       </form>
@@ -349,4 +352,4 @@ const CreateDonationRequest = () => {
   );
 };
 
-export default CreateDonationRequest;
+export default UpdateDonationRequest;
