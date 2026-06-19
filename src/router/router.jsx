@@ -4,6 +4,7 @@ import PrivateRoute from "../components/route/PrivateRoute";
 import VolunteerRoute from "../components/route/VolunteerRoute";
 import DashboardLayout from "../layouts/DashboardLayout";
 import MainLayout from "../layouts/MainLayout";
+import DashboardHome from "../pages/dashboard/DashboardHome";
 import ComingSoon from "../pages/shared/ComingSoon";
 
 const router = createBrowserRouter([
@@ -55,7 +56,7 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <ComingSoon title="Dashboard Home" />,
+        element: <DashboardHome />,
       },
       {
         path: "profile",
