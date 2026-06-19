@@ -4,13 +4,19 @@ import PrivateRoute from "../components/route/PrivateRoute";
 import VolunteerRoute from "../components/route/VolunteerRoute";
 import DashboardLayout from "../layouts/DashboardLayout";
 import MainLayout from "../layouts/MainLayout";
+import Login from "../pages/auth/Login";
+import Register from "../pages/auth/Register";
 import AllBloodDonationRequests from "../pages/dashboard/AllBloodDonationRequests";
 import AllUsers from "../pages/dashboard/AllUsers";
 import CreateDonationRequest from "../pages/dashboard/CreateDonationRequest";
 import DashboardHome from "../pages/dashboard/DashboardHome";
 import MyDonationRequests from "../pages/dashboard/MyDonationRequests";
 import Profile from "../pages/dashboard/Profile";
-import ComingSoon from "../pages/shared/ComingSoon";
+import DonationRequestDetails from "../pages/public/DonationRequestDetails";
+import DonationRequests from "../pages/public/DonationRequests";
+import Funding from "../pages/public/Funding";
+import Home from "../pages/public/Home";
+import Search from "../pages/public/Search";
 
 const router = createBrowserRouter([
   {
@@ -19,35 +25,39 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <ComingSoon title="Home Page" />,
+        element: <Home />,
       },
       {
         path: "donation-requests",
-        element: <ComingSoon title="Donation Requests" />,
+        element: <DonationRequests />,
       },
       {
         path: "donation-requests/:id",
         element: (
           <PrivateRoute>
-            <ComingSoon title="Donation Request Details" />
+            <DonationRequestDetails />
           </PrivateRoute>
         ),
       },
       {
         path: "search",
-        element: <ComingSoon title="Search Donors" />,
+        element: <Search />,
       },
       {
         path: "login",
-        element: <ComingSoon title="Login Page" />,
+        element: <Login />,
       },
       {
         path: "register",
-        element: <ComingSoon title="Register Page" />,
+        element: <Register />,
       },
       {
         path: "funding",
-        element: <ComingSoon title="Funding Page" />,
+        element: (
+          <PrivateRoute>
+            <Funding />
+          </PrivateRoute>
+        ),
       },
     ],
   },
