@@ -29,10 +29,12 @@ const Register = () => {
       districtId: "",
       upazilaId: "",
       password: "",
+      confirmPassword: "",
     },
   });
 
   const selectedDistrictId = watch("districtId");
+  const password = watch("password");
 
   const filteredUpazilas = useMemo(
     () => getUpazilasByDistrict(selectedDistrictId),
@@ -142,11 +144,11 @@ const Register = () => {
               </div>
 
               <div className="sm:col-span-2">
-                <label className="sc-label">Photo URL</label>
+                <label className="sc-label">Avatar / Photo URL</label>
                 <input
                   type="url"
                   className="sc-input mt-2"
-                  placeholder="Enter photo URL"
+                  placeholder="Enter avatar URL"
                   {...register("photoURL")}
                 />
               </div>
@@ -179,7 +181,9 @@ const Register = () => {
                   })}
                 >
                   <option value="">
-                    {locationLoading ? "Loading districts..." : "Select district"}
+                    {locationLoading
+                      ? "Loading districts..."
+                      : "Select district"}
                   </option>
 
                   {districts.map((district) => (
@@ -236,6 +240,21 @@ const Register = () => {
                 />
                 <FormError message={errors.password?.message} />
               </div>
+
+              <div>
+                <label className="sc-label">Confirm Password</label>
+                <input
+                  type="password"
+                  className="sc-input mt-2"
+                  placeholder="Confirm password"
+                  {...register("confirmPassword", {
+                    required: "Confirm password is required.",
+                    validate: (value) =>
+                      value === password || "Password does not match.",
+                  })}
+                />
+                <FormError message={errors.confirmPassword?.message} />
+              </div>
             </div>
 
             <Button
@@ -273,7 +292,10 @@ const Register = () => {
 
             <div className="mt-8 grid gap-4">
               <Feature icon="bloodtype" title="Blood Group Matching" />
-              <Feature icon="location_on" title="District & Upazila Based Search" />
+              <Feature
+                icon="location_on"
+                title="District & Upazila Based Search"
+              />
               <Feature icon="verified_user" title="Default Donor Access" />
             </div>
           </div>

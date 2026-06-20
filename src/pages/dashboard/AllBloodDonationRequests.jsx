@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import BloodBadge from "../../components/common/BloodBadge";
 import Button from "../../components/common/Button";
 import EmptyState from "../../components/common/EmptyState";
 import PageHeader from "../../components/common/PageHeader";
 import StatusBadge from "../../components/common/StatusBadge";
+import useAuth from "../../hooks/useAuth";
 import confirmModal from "../../utils/confirmModal";
 import { formatDate } from "../../utils/dateFormatter";
 
@@ -19,9 +20,14 @@ const initialRequests = [
     district: "Dhaka",
     upazila: "Dhanmondi",
     hospitalName: "Popular Medical College Hospital",
+    fullAddress: "House 12, Road 7, Dhanmondi, Dhaka",
     donationDate: "2026-06-20",
     donationTime: "10:30 AM",
+    requestMessage:
+      "The patient needs urgent blood support before surgery. Please contact the requester before visiting the hospital.",
     status: "pending",
+    donorName: "",
+    donorEmail: "",
   },
   {
     id: "REQ-1002",
@@ -33,9 +39,14 @@ const initialRequests = [
     district: "Chattogram",
     upazila: "Panchlaish",
     hospitalName: "Chattogram Medical College Hospital",
+    fullAddress: "Ward 18, Panchlaish, Chattogram",
     donationDate: "2026-06-21",
     donationTime: "02:00 PM",
+    requestMessage:
+      "Emergency blood support is needed for the recipient. Please confirm availability before going to the hospital.",
     status: "inprogress",
+    donorName: "Rafi Ahmed",
+    donorEmail: "rafi@example.com",
   },
   {
     id: "REQ-1003",
@@ -47,9 +58,14 @@ const initialRequests = [
     district: "Sylhet",
     upazila: "Sylhet Sadar",
     hospitalName: "MAG Osmani Medical College Hospital",
+    fullAddress: "Medical Road, Sylhet Sadar, Sylhet",
     donationDate: "2026-06-22",
     donationTime: "11:00 AM",
+    requestMessage:
+      "The recipient needs blood for emergency treatment. Donor should contact requester for exact hospital instructions.",
     status: "done",
+    donorName: "Hasan Mahmud",
+    donorEmail: "hasan@example.com",
   },
   {
     id: "REQ-1004",
@@ -61,14 +77,33 @@ const initialRequests = [
     district: "Rajshahi",
     upazila: "Boalia",
     hospitalName: "Rajshahi Medical College Hospital",
+    fullAddress: "Boalia Main Road, Rajshahi",
     donationDate: "2026-06-23",
     donationTime: "04:30 PM",
+    requestMessage:
+      "Blood is needed for urgent treatment. Please contact the requester before visiting the hospital.",
     status: "canceled",
+    donorName: "",
+    donorEmail: "",
   },
 ];
 
+const statusFilters = ["all", "pending", "inprogress", "done", "canceled"];
+
 const AllBloodDonationRequests = () => {
+  const { dbUser } = useAuth();
+
+  const role = dbUser?.role || "donor";
+  const isAdmin = role === "admin";
+
   const [requests, setRequests] = useState(initialRequests);
+  const [activeStatus, setActiveStatus] = useState("all");
+
+  const filteredRequests = useMemo(() => {
+    if (activeStatus === "all") return requests;
+
+    return requests.filter((request) => request.status === activeStatus);
+  }, [activeStatus, requests]);
 
   const handleStatusChange = async (requestId, status) => {
     const confirmed = await confirmModal({
@@ -86,15 +121,36 @@ const AllBloodDonationRequests = () => {
       )
     );
 
-    toast.success("Donation request status updated.");
+    toast.success(`Donation request status updated to ${status}.`);
+  };
+
+  const handleDeleteRequest = async (requestId) => {
+    const confirmed = await confirmModal({
+      title: "Delete this request?",
+      text: "Only admin can delete donation requests.",
+      confirmButtonText: "Yes, delete",
+      icon: "warning",
+    });
+
+    if (!confirmed) return;
+
+    setRequests((currentRequests) =>
+      currentRequests.filter((request) => request.id !== requestId)
+    );
+
+    toast.success("Donation request deleted successfully.");
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Volunteer / Admin"
-        title="Manage all blood donation requests"
-        description="Review all submitted donation requests and update request status based on real progress."
+        title="All blood donation requests"
+        description={
+          isAdmin
+            ? "Admin can review all requests, update status, and delete invalid requests."
+            : "Volunteer can review all requests and update donation status only."
+        }
         icon="assignment"
       />
 
@@ -105,18 +161,21 @@ const AllBloodDonationRequests = () => {
           status="active"
           icon="assignment"
         />
+
         <SummaryCard
           label="Pending"
           value={requests.filter((item) => item.status === "pending").length}
           status="pending"
           icon="pending_actions"
         />
+
         <SummaryCard
           label="In Progress"
           value={requests.filter((item) => item.status === "inprogress").length}
           status="inprogress"
           icon="sync"
         />
+
         <SummaryCard
           label="Completed"
           value={requests.filter((item) => item.status === "done").length}
@@ -125,29 +184,64 @@ const AllBloodDonationRequests = () => {
         />
       </section>
 
+      <section className="sc-card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-xl font-extrabold tracking-tight text-ink">
+              Filter Requests
+            </h2>
+
+            <p className="mt-1 text-sm font-semibold text-ink-muted">
+              Filter all donation requests by current status.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {statusFilters.map((status) => (
+              <Button
+                key={status}
+                size="sm"
+                variant={activeStatus === status ? "primary" : "secondary"}
+                onClick={() => setActiveStatus(status)}
+              >
+                {status === "all"
+                  ? "All"
+                  : status === "inprogress"
+                    ? "In Progress"
+                    : status.charAt(0).toUpperCase() + status.slice(1)}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="sc-card overflow-hidden">
         <div className="border-b border-surface-border p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-extrabold tracking-tight text-ink">
-                Donation Request List
+                Donation Request Management Table
               </h2>
+
               <p className="mt-1 text-sm font-semibold text-ink-muted">
-                Volunteers can update request status. Admin can review all
-                request activity.
+                Showing {filteredRequests.length} request
+                {filteredRequests.length === 1 ? "" : "s"} for current filter.
               </p>
             </div>
 
-            <StatusBadge status="volunteer" label="Status Control" />
+            <StatusBadge
+              status={isAdmin ? "admin" : "volunteer"}
+              label={isAdmin ? "Admin Control" : "Volunteer Status Control"}
+            />
           </div>
         </div>
 
-        {requests.length === 0 ? (
+        {filteredRequests.length === 0 ? (
           <div className="p-5 sm:p-6">
             <EmptyState
               icon="assignment_late"
               title="No donation request found"
-              description="No blood donation request has been submitted yet."
+              description="No blood donation request matched your selected filter."
             />
           </div>
         ) : (
@@ -155,22 +249,28 @@ const AllBloodDonationRequests = () => {
             <table className="table">
               <thead>
                 <tr className="border-surface-border text-xs uppercase tracking-[0.12em] text-ink-muted">
-                  <th>Blood</th>
-                  <th>Recipient</th>
                   <th>Requester</th>
+                  <th>Recipient</th>
+                  <th>Blood</th>
                   <th>Hospital</th>
                   <th>Location</th>
-                  <th>Date</th>
+                  <th>Date & Time</th>
+                  <th>Donor Info</th>
                   <th>Status</th>
-                  <th className="text-right">Update</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
 
               <tbody>
-                {requests.map((request) => (
+                {filteredRequests.map((request) => (
                   <tr key={request.id} className="border-surface-border">
                     <td>
-                      <BloodBadge group={request.bloodGroup} size="sm" />
+                      <p className="font-bold text-ink">
+                        {request.requesterName}
+                      </p>
+                      <p className="text-xs font-semibold text-ink-muted">
+                        {request.requesterEmail}
+                      </p>
                     </td>
 
                     <td>
@@ -183,17 +283,15 @@ const AllBloodDonationRequests = () => {
                     </td>
 
                     <td>
-                      <p className="font-bold text-ink">
-                        {request.requesterName}
-                      </p>
-                      <p className="text-xs font-semibold text-ink-muted">
-                        {request.requesterPhone}
-                      </p>
+                      <BloodBadge group={request.bloodGroup} size="sm" />
                     </td>
 
                     <td>
                       <p className="max-w-[220px] font-bold text-ink">
                         {request.hospitalName}
+                      </p>
+                      <p className="max-w-[220px] text-xs font-semibold text-ink-muted">
+                        {request.fullAddress}
                       </p>
                     </td>
 
@@ -211,6 +309,23 @@ const AllBloodDonationRequests = () => {
                       <p className="text-xs font-semibold text-ink-muted">
                         {request.donationTime}
                       </p>
+                    </td>
+
+                    <td>
+                      {request.donorEmail ? (
+                        <div>
+                          <p className="font-bold text-ink">
+                            {request.donorName}
+                          </p>
+                          <p className="text-xs font-semibold text-ink-muted">
+                            {request.donorEmail}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs font-bold text-ink-muted">
+                          Not assigned
+                        </p>
+                      )}
                     </td>
 
                     <td>
@@ -264,6 +379,17 @@ const AllBloodDonationRequests = () => {
                         >
                           Cancel
                         </Button>
+
+                        {isAdmin ? (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            icon="delete"
+                            onClick={() => handleDeleteRequest(request.id)}
+                          >
+                            Delete
+                          </Button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

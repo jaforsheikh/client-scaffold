@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
 import BloodBadge from "../../components/common/BloodBadge";
 import Button from "../../components/common/Button";
 import SectionTitle from "../../components/common/SectionTitle";
@@ -7,6 +8,12 @@ import { recentDonationRequests } from "../../data/dashboardMockData";
 import { formatDate } from "../../utils/dateFormatter";
 
 const Home = () => {
+  const handleContactSubmit = (event) => {
+    event.preventDefault();
+    toast.success("Message submitted successfully.");
+    event.target.reset();
+  };
+
   return (
     <div className="bg-surface-page">
       <section className="relative overflow-hidden py-14 sm:py-20 lg:py-24">
@@ -19,7 +26,7 @@ const Home = () => {
               <span className="material-symbols-rounded text-base">
                 favorite
               </span>
-              Trusted Blood Donation Network
+              Trusted Blood Donor Organization
             </p>
 
             <h1 className="mt-6 max-w-4xl text-4xl font-extrabold tracking-tight text-ink sm:text-5xl lg:text-6xl">
@@ -32,15 +39,15 @@ const Home = () => {
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link to="/search">
-                <Button icon="search" size="lg">
-                  Search Donors
+              <Link to="/register">
+                <Button icon="person_add" size="lg">
+                  Join as a donor
                 </Button>
               </Link>
 
-              <Link to="/donation-requests">
-                <Button icon="volunteer_activism" size="lg" variant="secondary">
-                  View Requests
+              <Link to="/search">
+                <Button icon="search" size="lg" variant="secondary">
+                  Search Donors
                 </Button>
               </Link>
             </div>
@@ -60,7 +67,7 @@ const Home = () => {
                     Live Request Board
                   </p>
                   <h2 className="mt-2 text-2xl font-extrabold tracking-tight">
-                    Urgent Blood Needs
+                    Pending Blood Needs
                   </h2>
                 </div>
 
@@ -72,7 +79,7 @@ const Home = () => {
               </div>
 
               <div className="mt-6 space-y-4">
-                {recentDonationRequests.map((request) => (
+                {recentDonationRequests.slice(0, 3).map((request) => (
                   <div
                     key={request.id}
                     className="rounded-[24px] border border-white/10 bg-white/10 p-4"
@@ -128,12 +135,14 @@ const Home = () => {
               title="Create an account"
               description="Register as a donor and keep your blood group, district and upazila updated."
             />
+
             <ProcessCard
               number="02"
               icon="assignment_add"
               title="Submit request"
               description="Requesters can submit hospital, recipient, date and emergency details."
             />
+
             <ProcessCard
               number="03"
               icon="verified"
@@ -176,22 +185,116 @@ const Home = () => {
                 title="Donor Search"
                 description="Search donors by blood group, district and upazila."
               />
+
               <FeatureCard
                 icon="assignment"
                 title="Request Management"
                 description="Create and monitor blood donation requests."
               />
+
               <FeatureCard
                 icon="admin_panel_settings"
                 title="Role Dashboard"
                 description="Separate access for donor, volunteer and admin."
               />
+
               <FeatureCard
                 icon="payments"
                 title="Funding Support"
                 description="Stripe-ready funding page for platform support."
               />
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-12 sm:py-16">
+        <div className="sc-container">
+          <div className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]">
+            <div className="sc-card p-6 sm:p-8">
+              <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-primary">
+                Contact Us
+              </p>
+
+              <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-ink">
+                Need help with blood donation support?
+              </h2>
+
+              <p className="mt-4 text-base font-semibold leading-7 text-ink-muted">
+                Contact our support team for donor coordination, request
+                assistance, or platform-related questions.
+              </p>
+
+              <div className="mt-8 space-y-4">
+                <ContactInfo
+                  icon="call"
+                  label="Contact Number"
+                  value="+880 1700-000000"
+                />
+
+                <ContactInfo
+                  icon="mail"
+                  label="Support Email"
+                  value="support@scaffold.org"
+                />
+
+                <ContactInfo
+                  icon="location_on"
+                  label="Organization Area"
+                  value="Bangladesh Blood Donor Support Network"
+                />
+              </div>
+            </div>
+
+            <form onSubmit={handleContactSubmit} className="sc-card p-6 sm:p-8">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label className="sc-label">Your Name</label>
+                  <input
+                    type="text"
+                    required
+                    className="sc-input mt-2"
+                    placeholder="Enter your name"
+                  />
+                </div>
+
+                <div>
+                  <label className="sc-label">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    className="sc-input mt-2"
+                    placeholder="Enter your email"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="sc-label">Subject</label>
+                  <input
+                    type="text"
+                    required
+                    className="sc-input mt-2"
+                    placeholder="How can we help?"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="sc-label">Message</label>
+                  <textarea
+                    rows="5"
+                    required
+                    className="sc-textarea mt-2"
+                    placeholder="Write your message"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <Button type="submit" icon="send">
+                  Send Message
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       </section>
@@ -215,13 +318,13 @@ const Home = () => {
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link to="/register">
                 <Button icon="person_add" size="lg">
-                  Become a Donor
+                  Join as a donor
                 </Button>
               </Link>
 
-              <Link to="/funding">
-                <Button icon="volunteer_activism" size="lg" variant="secondary">
-                  Support Funding
+              <Link to="/search">
+                <Button icon="search" size="lg" variant="secondary">
+                  Search Donors
                 </Button>
               </Link>
             </div>
@@ -278,6 +381,21 @@ const FeatureCard = ({ icon, title, description }) => {
       <p className="mt-3 text-sm font-semibold leading-6 text-ink-muted">
         {description}
       </p>
+    </div>
+  );
+};
+
+const ContactInfo = ({ icon, label, value }) => {
+  return (
+    <div className="flex items-center gap-3 rounded-[22px] border border-surface-border bg-surface-soft p-4">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-white text-primary shadow-sm">
+        <span className="material-symbols-rounded">{icon}</span>
+      </span>
+
+      <div>
+        <p className="text-xs font-bold text-ink-muted">{label}</p>
+        <p className="text-sm font-extrabold text-ink">{value}</p>
+      </div>
     </div>
   );
 };
