@@ -46,8 +46,16 @@ const MainLayout = () => {
           </Link>
 
           <div className="hidden items-center gap-1 md:flex">
+            <NavLink to="/" end className={navClass}>
+              Home
+            </NavLink>
+
             <NavLink to="/donation-requests" className={navClass}>
               Donation Requests
+            </NavLink>
+
+            <NavLink to="/search" className={navClass}>
+              Search Donors
             </NavLink>
 
             {user ? (
@@ -131,8 +139,16 @@ const MainLayout = () => {
 
         <div className="border-t border-surface-border px-4 py-3 md:hidden">
           <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto">
+            <NavLink to="/" end className={navClass}>
+              Home
+            </NavLink>
+
             <NavLink to="/donation-requests" className={navClass}>
               Donation Requests
+            </NavLink>
+
+            <NavLink to="/search" className={navClass}>
+              Search Donors
             </NavLink>
 
             {user ? (
@@ -181,6 +197,9 @@ const MainLayout = () => {
             </h3>
 
             <div className="mt-4 grid gap-3 text-sm font-bold text-white/65">
+              <Link className="hover:text-white" to="/">
+                Home
+              </Link>
               <Link className="hover:text-white" to="/donation-requests">
                 Donation Requests
               </Link>
