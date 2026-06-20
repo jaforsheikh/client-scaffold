@@ -7,6 +7,49 @@ import StatusBadge from "../../components/common/StatusBadge";
 import { recentDonationRequests } from "../../data/dashboardMockData";
 import { formatDate } from "../../utils/dateFormatter";
 
+const faqItems = [
+  {
+    question: "Who can register as a blood donor?",
+    answer:
+      "Anyone who is eligible, healthy, and willing to support emergency blood donation requests can register as a donor.",
+  },
+  {
+    question: "How can I search for blood donors?",
+    answer:
+      "Use the Search Donors page and select blood group, district, and upazila. Donor results will show only after clicking the search button.",
+  },
+  {
+    question: "Can I create a blood donation request?",
+    answer:
+      "Yes. Logged-in active users can create donation requests from the dashboard with recipient, hospital, location, blood group, date, time, and message.",
+  },
+  {
+    question: "Can blocked users create donation requests?",
+    answer:
+      "No. Blocked users cannot create blood donation requests until an admin changes their account status to active.",
+  },
+  {
+    question: "Who can update donation request status?",
+    answer:
+      "Volunteers and admins can update request status. Donors can mark their own in-progress requests as done or canceled.",
+  },
+  {
+    question: "What information is shown on a donation request details page?",
+    answer:
+      "The details page shows requester information, recipient information, hospital name, full address, blood group, date, time, message, and current request status.",
+  },
+  {
+    question: "How does the funding page work?",
+    answer:
+      "Logged-in users can access the funding page, view funding history, and use the Give Fund button with Stripe-ready payment UI.",
+  },
+  {
+    question: "Is Scaffold mobile responsive?",
+    answer:
+      "Yes. The layout is designed to work across desktop, tablet, and mobile screens with responsive navigation and dashboard pages.",
+  },
+];
+
 const Home = () => {
   const handleContactSubmit = (event) => {
     event.preventDefault();
@@ -210,6 +253,28 @@ const Home = () => {
 
       <section className="py-12 sm:py-16">
         <div className="sc-container">
+          <SectionTitle
+            eyebrow="FAQ"
+            title="Common questions about"
+            highlight="Scaffold"
+            description="Quick answers about donor search, donation requests, role access, funding, and account safety."
+          />
+
+          <div className="mx-auto mt-10 max-w-4xl space-y-4">
+            {faqItems.map((item, index) => (
+              <FAQItem
+                key={item.question}
+                number={String(index + 1).padStart(2, "0")}
+                question={item.question}
+                answer={item.answer}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-12 sm:py-16">
+        <div className="sc-container">
           <div className="grid gap-6 lg:grid-cols-[.9fr_1.1fr]">
             <div className="sc-card p-6 sm:p-8">
               <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-primary">
@@ -382,6 +447,34 @@ const FeatureCard = ({ icon, title, description }) => {
         {description}
       </p>
     </div>
+  );
+};
+
+const FAQItem = ({ number, question, answer }) => {
+  return (
+    <details className="group sc-card overflow-hidden p-5 sm:p-6">
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+        <div className="flex gap-4">
+          <span className="mt-1 text-sm font-extrabold text-primary">
+            {number}
+          </span>
+
+          <div>
+            <h3 className="text-lg font-extrabold tracking-tight text-ink">
+              {question}
+            </h3>
+
+            <p className="mt-3 hidden text-sm font-semibold leading-7 text-ink-muted group-open:block">
+              {answer}
+            </p>
+          </div>
+        </div>
+
+        <span className="material-symbols-rounded shrink-0 rounded-full bg-primary-tint p-2 text-primary transition group-open:rotate-180">
+          expand_more
+        </span>
+      </summary>
+    </details>
   );
 };
 
