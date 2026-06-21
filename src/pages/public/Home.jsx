@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import BloodBadge from "../../components/common/BloodBadge";
@@ -51,6 +52,8 @@ const faqItems = [
 ];
 
 const Home = () => {
+  const [openFaqIndex, setOpenFaqIndex] = useState(0);
+
   const handleContactSubmit = (event) => {
     event.preventDefault();
     toast.success("Message submitted successfully.");
@@ -109,6 +112,7 @@ const Home = () => {
                   <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-white/50">
                     Live Request Board
                   </p>
+
                   <h2 className="mt-2 text-2xl font-extrabold tracking-tight">
                     Pending Blood Needs
                   </h2>
@@ -132,6 +136,7 @@ const Home = () => {
                         <p className="font-extrabold">
                           {request.recipientName}
                         </p>
+
                         <p className="mt-1 text-sm font-semibold text-white/60">
                           {request.hospitalName}
                         </p>
@@ -267,6 +272,10 @@ const Home = () => {
                 number={String(index + 1).padStart(2, "0")}
                 question={item.question}
                 answer={item.answer}
+                isOpen={openFaqIndex === index}
+                onToggle={() =>
+                  setOpenFaqIndex(openFaqIndex === index ? null : index)
+                }
               />
             ))}
           </div>
@@ -406,6 +415,7 @@ const HeroStat = ({ value, label }) => {
       <h3 className="text-3xl font-extrabold tracking-tight text-primary">
         {value}
       </h3>
+
       <p className="mt-1 text-sm font-bold text-ink-muted">{label}</p>
     </div>
   );
@@ -416,6 +426,7 @@ const ProcessCard = ({ number, icon, title, description }) => {
     <div className="sc-card p-6">
       <div className="flex items-center justify-between gap-4">
         <span className="text-sm font-extrabold text-primary">{number}</span>
+
         <span className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-primary-tint text-primary">
           <span className="material-symbols-rounded text-3xl">{icon}</span>
         </span>
@@ -450,10 +461,15 @@ const FeatureCard = ({ icon, title, description }) => {
   );
 };
 
-const FAQItem = ({ number, question, answer }) => {
+const FAQItem = ({ number, question, answer, isOpen, onToggle }) => {
   return (
-    <details className="group sc-card overflow-hidden p-5 sm:p-6">
-      <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+    <div className="sc-card overflow-hidden p-5 sm:p-6">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-start justify-between gap-4 text-left"
+        aria-expanded={isOpen}
+      >
         <div className="flex gap-4">
           <span className="mt-1 text-sm font-extrabold text-primary">
             {number}
@@ -464,17 +480,24 @@ const FAQItem = ({ number, question, answer }) => {
               {question}
             </h3>
 
-            <p className="mt-3 hidden text-sm font-semibold leading-7 text-ink-muted group-open:block">
-              {answer}
-            </p>
+            {isOpen ? (
+              <p className="mt-3 text-sm font-semibold leading-7 text-ink-muted">
+                {answer}
+              </p>
+            ) : null}
           </div>
         </div>
 
-        <span className="material-symbols-rounded shrink-0 rounded-full bg-primary-tint p-2 text-primary transition group-open:rotate-180">
+        <span
+          className={[
+            "material-symbols-rounded shrink-0 rounded-full bg-primary-tint p-2 text-primary transition",
+            isOpen ? "rotate-180" : "",
+          ].join(" ")}
+        >
           expand_more
         </span>
-      </summary>
-    </details>
+      </button>
+    </div>
   );
 };
 
