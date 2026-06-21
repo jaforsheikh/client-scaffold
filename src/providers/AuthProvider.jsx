@@ -1,109 +1,148 @@
-import {
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile,
-} from "firebase/auth";
-import { createContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import axiosPublic from "../api/axiosPublic";
-import { auth } from "../firebase/firebase.config";
+import { authClient } from "../api/authClient";
 
 export const AuthContext = createContext(null);
 
+const formatUser = (sessionUser) => {
+  if (!sessionUser) return null;
+
+  return {
+    ...sessionUser,
+    uid: sessionUser.id,
+    displayName: sessionUser.name || "",
+    photoURL: sessionUser.avatar || sessionUser.image || "",
+  };
+};
+
 const AuthProvider = ({ children }) => {
+  const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [dbUser, setDbUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const createUser = (email, password) => {
+  const refreshSession = useCallback(async () => {
     setLoading(true);
-    return createUserWithEmailAndPassword(auth, email, password);
+
+    try {
+      const { data, error } = await authClient.getSession();
+
+      if (error) {
+        setSession(null);
+        setUser(null);
+        setDbUser(null);
+        return null;
+      }
+
+      const sessionUser = data?.user || null;
+      const formattedUser = formatUser(sessionUser);
+
+      setSession(data || null);
+      setUser(formattedUser);
+      setDbUser(formattedUser);
+
+      return data || null;
+    } catch {
+      setSession(null);
+      setUser(null);
+      setDbUser(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSession();
+  }, [refreshSession]);
+
+  const createUser = async (email, password, extraData = {}) => {
+    setLoading(true);
+
+    try {
+      const { data, error } = await authClient.signUp.email({
+        email,
+        password,
+        name: extraData.name || extraData.displayName || "",
+        image: extraData.avatar || extraData.photoURL || "",
+        avatar: extraData.avatar || extraData.photoURL || "",
+        bloodGroup: extraData.bloodGroup || "",
+        district: extraData.district || "",
+        upazila: extraData.upazila || "",
+      });
+
+      if (error) {
+        throw new Error(error.message || "Registration failed.");
+      }
+
+      await refreshSession();
+      return data;
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const loginUser = (email, password) => {
+  const loginUser = async (email, password) => {
     setLoading(true);
-    return signInWithEmailAndPassword(auth, email, password);
-  };
 
-  const updateUserProfile = (profile) => {
-    return updateProfile(auth.currentUser, profile);
+    try {
+      const { data, error } = await authClient.signIn.email({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw new Error(error.message || "Login failed.");
+      }
+
+      await refreshSession();
+      return data;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logoutUser = async () => {
     setLoading(true);
 
     try {
-      localStorage.removeItem("scaffold-token");
+      await authClient.signOut();
+
+      setSession(null);
       setUser(null);
       setDbUser(null);
-      await signOut(auth);
+
       toast.success("Logged out successfully.");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchDbUser = async (currentUser) => {
-    if (!currentUser?.email) {
-      setDbUser(null);
-      return;
-    }
-
-    try {
-      const { data } = await axiosPublic.get("/users/me", {
-        params: { email: currentUser.email },
-      });
-
-      setDbUser(data);
-    } catch {
-      setDbUser({
-        name: currentUser?.displayName || "Scaffold User",
-        email: currentUser?.email || "",
-        avatar: currentUser?.photoURL || "",
-        role: "donor",
-        status: "active",
-      });
-    }
-  };
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
-
-      try {
-        if (currentUser?.email) {
-          setUser(currentUser);
-
-          try {
-            const { data } = await axiosPublic.post("/jwt", {
-              email: currentUser.email,
-            });
-
-            if (data?.token) {
-              localStorage.setItem("scaffold-token", data.token);
-            }
-          } catch {
-            localStorage.removeItem("scaffold-token");
-          }
-
-          await fetchDbUser(currentUser);
-        } else {
-          localStorage.removeItem("scaffold-token");
-          setUser(null);
-          setDbUser(null);
-        }
-      } finally {
-        setLoading(false);
-      }
+  const updateUserProfile = async (profile) => {
+    const { data, error } = await authClient.updateUser({
+      name: profile.name || profile.displayName || user?.name || "",
+      image: profile.avatar || profile.photoURL || user?.photoURL || "",
+      avatar: profile.avatar || profile.photoURL || user?.photoURL || "",
+      bloodGroup: profile.bloodGroup || dbUser?.bloodGroup || "",
+      district: profile.district || dbUser?.district || "",
+      upazila: profile.upazila || dbUser?.upazila || "",
     });
 
-    return () => unsubscribe();
-  }, []);
+    if (error) {
+      throw new Error(error.message || "Profile update failed.");
+    }
+
+    await refreshSession();
+    return data;
+  };
+
+  const fetchDbUser = async () => {
+    return refreshSession();
+  };
 
   const authInfo = useMemo(
     () => ({
+      session,
       user,
       dbUser,
       loading,
@@ -112,17 +151,16 @@ const AuthProvider = ({ children }) => {
       logoutUser,
       updateUserProfile,
       fetchDbUser,
+      refreshSession,
       isAdmin: dbUser?.role === "admin",
       isVolunteer: dbUser?.role === "volunteer",
       isDonor: !dbUser?.role || dbUser?.role === "donor",
       isBlocked: dbUser?.status === "blocked",
     }),
-    [user, dbUser, loading]
+    [session, user, dbUser, loading, refreshSession]
   );
 
-  return (
-    <AuthContext.Provider value={authInfo}>{children}</AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={authInfo}>{children}</AuthContext.Provider>;
 };
 
 export default AuthProvider;

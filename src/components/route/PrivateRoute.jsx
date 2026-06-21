@@ -7,10 +7,10 @@ const PrivateRoute = ({ children }) => {
   const location = useLocation();
 
   if (loading) {
-    return <Loader label="Checking your secure session..." />;
+    return <Loader />;
   }
 
-  if (!user) {
+  if (!user?.email) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

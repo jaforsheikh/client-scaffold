@@ -1,133 +1,112 @@
-import { useMemo } from "react";
-import { useForm } from "react-hook-form";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useForm, useWatch } from "react-hook-form";
 import toast from "react-hot-toast";
-import Button from "../../components/common/Button";
-import FormError from "../../components/common/FormError";
-import axiosPublic from "../../api/axiosPublic";
 import useAuth from "../../hooks/useAuth";
 import useLocationData from "../../hooks/useLocationData";
-import { BLOOD_GROUPS, DEFAULT_AVATAR } from "../../utils/constants";
+import { BLOOD_GROUPS } from "../../utils/constants";
 
 const Register = () => {
-  const { user, createUser, updateUserProfile, loading } = useAuth();
-  const { districts, loading: locationLoading, getUpazilasByDistrict } =
+  const { createUser } = useAuth();
+  const { districts, getUpazilasByDistrict, loading: locationLoading } =
     useLocationData();
+
   const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
+    control,
     handleSubmit,
-    watch,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    defaultValues: {
-      name: "",
-      email: "",
-      photoURL: "",
-      bloodGroup: "",
-      districtId: "",
-      upazilaId: "",
-      password: "",
-      confirmPassword: "",
-    },
+    resetField,
+    formState: { errors },
+  } = useForm();
+
+  const selectedDistrictName = useWatch({
+    control,
+    name: "district",
   });
 
-  const selectedDistrictId = watch("districtId");
-  const password = watch("password");
-
-  const filteredUpazilas = useMemo(
-    () => getUpazilasByDistrict(selectedDistrictId),
-    [getUpazilasByDistrict, selectedDistrictId]
+  const selectedDistrict = useMemo(
+    () =>
+      districts.find(
+        (district) => district.name === selectedDistrictName
+      ),
+    [districts, selectedDistrictName]
   );
 
-  if (!loading && user) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  const upazilaOptions = useMemo(() => {
+    if (!selectedDistrict?.id) return [];
+    return getUpazilasByDistrict(selectedDistrict.id);
+  }, [selectedDistrict, getUpazilasByDistrict]);
 
-  const onSubmit = async (data) => {
-    const selectedDistrict = districts.find(
-      (district) => String(district.id) === String(data.districtId)
-    );
+  const handleDistrictChange = () => {
+    resetField("upazila");
+  };
 
-    const selectedUpazila = filteredUpazilas.find(
-      (upazila) => String(upazila.id) === String(data.upazilaId)
-    );
+  const handleRegister = async (formData) => {
+    if (formData.password !== formData.confirmPassword) {
+      toast.error("Password and confirm password do not match.");
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
-      const result = await createUser(data.email, data.password);
-
-      await updateUserProfile({
-        displayName: data.name,
-        photoURL: data.photoURL || DEFAULT_AVATAR,
+      await createUser(formData.email, formData.password, {
+        name: formData.name,
+        avatar: formData.avatar,
+        bloodGroup: formData.bloodGroup,
+        district: formData.district,
+        upazila: formData.upazila,
       });
 
-      const userInfo = {
-        name: data.name,
-        email: data.email,
-        avatar: data.photoURL || DEFAULT_AVATAR,
-        bloodGroup: data.bloodGroup,
-        district: selectedDistrict?.name || "",
-        districtId: data.districtId,
-        upazila: selectedUpazila?.name || "",
-        upazilaId: data.upazilaId,
-        role: "donor",
-        status: "active",
-        createdAt: new Date().toISOString(),
-      };
-
-      try {
-        await axiosPublic.post("/users", userInfo);
-      } catch {
-        console.log("Backend user save will be connected later:", userInfo);
-      }
-
-      if (result?.user?.email) {
-        toast.success("Account created successfully.");
-        navigate("/dashboard", { replace: true });
-      }
+      toast.success("Registration successful.");
+      navigate("/dashboard", { replace: true });
     } catch (error) {
-      const message =
-        error?.code === "auth/email-already-in-use"
-          ? "This email is already registered."
-          : "Registration failed. Please check your information.";
-
-      toast.error(message);
+      toast.error(error.message || "Registration failed.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <section className="min-h-[calc(100vh-76px)] bg-surface-page py-10 sm:py-14">
-      <div className="sc-container grid min-h-[760px] items-center gap-8 lg:grid-cols-[1.05fr_.95fr]">
-        <div className="sc-card p-6 sm:p-8 lg:p-10">
-          <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
-            <span className="material-symbols-rounded text-4xl">
-              person_add
+    <section className="bg-surface-page py-12 sm:py-16">
+      <div className="sc-container">
+        <div className="mx-auto grid max-w-7xl overflow-hidden rounded-[34px] border border-surface-border bg-white shadow-card lg:grid-cols-[1.05fr_.95fr]">
+          <div className="p-6 sm:p-10">
+            <span className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+              <span className="material-symbols-rounded text-4xl">
+                person_add
+              </span>
             </span>
-          </div>
 
-          <h1 className="mt-6 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
-            Create your donor account
-          </h1>
+            <p className="mt-8 text-xs font-extrabold uppercase tracking-[0.2em] text-primary">
+              Donor Registration
+            </p>
 
-          <p className="mt-3 text-base font-semibold leading-7 text-ink-muted">
-            Register as a donor with accurate blood group and location
-            information.
-          </p>
+            <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+              Create your donor account
+            </h1>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
-            <div className="grid gap-5 sm:grid-cols-2">
+            <p className="mt-3 max-w-xl text-base font-semibold leading-7 text-ink-muted">
+              Register as a donor with accurate blood group and location
+              information.
+            </p>
+
+            <form
+              onSubmit={handleSubmit(handleRegister)}
+              className="mt-8 grid gap-5 sm:grid-cols-2"
+            >
               <div>
                 <label className="sc-label">Full Name</label>
                 <input
                   type="text"
                   className="sc-input mt-2"
                   placeholder="Enter your full name"
-                  {...register("name", {
-                    required: "Full name is required.",
-                  })}
+                  {...register("name", { required: "Name is required." })}
                 />
-                <FormError message={errors.name?.message} />
+                {errors.name ? <FormError message={errors.name.message} /> : null}
               </div>
 
               <div>
@@ -136,11 +115,11 @@ const Register = () => {
                   type="email"
                   className="sc-input mt-2"
                   placeholder="Enter your email"
-                  {...register("email", {
-                    required: "Email address is required.",
-                  })}
+                  {...register("email", { required: "Email is required." })}
                 />
-                <FormError message={errors.email?.message} />
+                {errors.email ? (
+                  <FormError message={errors.email.message} />
+                ) : null}
               </div>
 
               <div className="sm:col-span-2">
@@ -149,7 +128,7 @@ const Register = () => {
                   type="url"
                   className="sc-input mt-2"
                   placeholder="Enter avatar URL"
-                  {...register("photoURL")}
+                  {...register("avatar")}
                 />
               </div>
 
@@ -168,7 +147,9 @@ const Register = () => {
                     </option>
                   ))}
                 </select>
-                <FormError message={errors.bloodGroup?.message} />
+                {errors.bloodGroup ? (
+                  <FormError message={errors.bloodGroup.message} />
+                ) : null}
               </div>
 
               <div>
@@ -176,47 +157,48 @@ const Register = () => {
                 <select
                   className="sc-select mt-2"
                   disabled={locationLoading}
-                  {...register("districtId", {
+                  {...register("district", {
                     required: "District is required.",
+                    onChange: handleDistrictChange,
                   })}
                 >
                   <option value="">
-                    {locationLoading
-                      ? "Loading districts..."
-                      : "Select district"}
+                    {locationLoading ? "Loading districts..." : "Select district"}
                   </option>
-
                   {districts.map((district) => (
-                    <option key={district.id} value={district.id}>
+                    <option key={district.id} value={district.name}>
                       {district.name}
                     </option>
                   ))}
                 </select>
-                <FormError message={errors.districtId?.message} />
+                {errors.district ? (
+                  <FormError message={errors.district.message} />
+                ) : null}
               </div>
 
               <div>
                 <label className="sc-label">Upazila</label>
                 <select
                   className="sc-select mt-2"
-                  disabled={!selectedDistrictId || locationLoading}
-                  {...register("upazilaId", {
+                  disabled={!selectedDistrictName || locationLoading}
+                  {...register("upazila", {
                     required: "Upazila is required.",
                   })}
                 >
                   <option value="">
-                    {!selectedDistrictId
-                      ? "Select district first"
-                      : "Select upazila"}
+                    {selectedDistrictName
+                      ? "Select upazila"
+                      : "Select district first"}
                   </option>
-
-                  {filteredUpazilas.map((upazila) => (
-                    <option key={upazila.id} value={upazila.id}>
+                  {upazilaOptions.map((upazila) => (
+                    <option key={upazila.id} value={upazila.name}>
                       {upazila.name}
                     </option>
                   ))}
                 </select>
-                <FormError message={errors.upazilaId?.message} />
+                {errors.upazila ? (
+                  <FormError message={errors.upazila.message} />
+                ) : null}
               </div>
 
               <div>
@@ -224,21 +206,18 @@ const Register = () => {
                 <input
                   type="password"
                   className="sc-input mt-2"
-                  placeholder="Create password"
+                  placeholder="Enter password"
                   {...register("password", {
                     required: "Password is required.",
                     minLength: {
-                      value: 6,
-                      message: "Password must be at least 6 characters.",
-                    },
-                    pattern: {
-                      value: /^(?=.*[a-z])(?=.*[A-Z]).{6,}$/,
-                      message:
-                        "Password must include at least one uppercase and one lowercase letter.",
+                      value: 8,
+                      message: "Password must be at least 8 characters.",
                     },
                   })}
                 />
-                <FormError message={errors.password?.message} />
+                {errors.password ? (
+                  <FormError message={errors.password.message} />
+                ) : null}
               </div>
 
               <div>
@@ -249,54 +228,54 @@ const Register = () => {
                   placeholder="Confirm password"
                   {...register("confirmPassword", {
                     required: "Confirm password is required.",
-                    validate: (value) =>
-                      value === password || "Password does not match.",
                   })}
                 />
-                <FormError message={errors.confirmPassword?.message} />
+                {errors.confirmPassword ? (
+                  <FormError message={errors.confirmPassword.message} />
+                ) : null}
               </div>
-            </div>
 
-            <Button
-              type="submit"
-              icon="person_add"
-              loading={isSubmitting}
-              className="w-full"
-            >
-              Register
-            </Button>
-          </form>
+              <div className="sm:col-span-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="sc-primary-btn w-full justify-center px-6 py-3 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span className="material-symbols-rounded">person_add</span>
+                  {isSubmitting ? "Registering..." : "Register"}
+                </button>
+              </div>
+            </form>
 
-          <p className="mt-6 text-center text-sm font-semibold text-ink-muted">
-            Already have an account?{" "}
-            <Link to="/login" className="font-extrabold text-primary">
-              Login
-            </Link>
-          </p>
-        </div>
+            <p className="mt-6 text-center text-sm font-semibold text-ink-muted">
+              Already have an account?{" "}
+              <Link to="/login" className="font-extrabold text-primary">
+                Login
+              </Link>
+            </p>
+          </div>
 
-        <div className="hidden lg:block">
-          <div className="rounded-[36px] bg-ink p-8 text-white shadow-card">
-            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-white/50">
+          <div className="hidden bg-ink p-10 text-white lg:block">
+            <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-white/45">
               Donor Registration
             </p>
 
-            <h2 className="mt-4 text-4xl font-extrabold tracking-tight">
+            <h2 className="mt-4 max-w-lg text-4xl font-extrabold tracking-tight">
               Your donor profile helps requesters find support faster.
             </h2>
 
-            <p className="mt-4 text-base font-semibold leading-8 text-white/60">
+            <p className="mt-5 max-w-lg text-base font-semibold leading-8 text-white/60">
               Accurate blood group, district and upazila information improves
               donor search and emergency request matching.
             </p>
 
-            <div className="mt-8 grid gap-4">
-              <Feature icon="bloodtype" title="Blood Group Matching" />
-              <Feature
+            <div className="mt-10 space-y-4">
+              <RegisterFeature icon="bloodtype" title="Blood Group Matching" />
+              <RegisterFeature
                 icon="location_on"
                 title="District & Upazila Based Search"
               />
-              <Feature icon="verified_user" title="Default Donor Access" />
+              <RegisterFeature icon="verified_user" title="Default Donor Access" />
             </div>
           </div>
         </div>
@@ -305,14 +284,17 @@ const Register = () => {
   );
 };
 
-const Feature = ({ icon, title }) => {
+const FormError = ({ message }) => {
+  return <p className="mt-2 text-xs font-bold text-state-danger">{message}</p>;
+};
+
+const RegisterFeature = ({ icon, title }) => {
   return (
-    <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-white/10 p-4">
-      <span className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-primary text-white">
+    <div className="flex items-center gap-4 rounded-[24px] bg-white/10 p-4">
+      <span className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-primary text-white">
         <span className="material-symbols-rounded">{icon}</span>
       </span>
-
-      <p className="font-extrabold">{title}</p>
+      <p className="text-sm font-extrabold">{title}</p>
     </div>
   );
 };
