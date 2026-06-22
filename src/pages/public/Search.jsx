@@ -1,97 +1,104 @@
 import { useMemo, useState } from "react";
+import toast from "react-hot-toast";
+import axiosPublic from "../../api/axiosPublic";
 import BloodBadge from "../../components/common/BloodBadge";
 import Button from "../../components/common/Button";
-import EmptyState from "../../components/common/EmptyState";
-import PageHeader from "../../components/common/PageHeader";
-import StatusBadge from "../../components/common/StatusBadge";
-import { donorMockData } from "../../data/donorMockData";
+import Loader from "../../components/common/Loader";
 import useLocationData from "../../hooks/useLocationData";
-import { BLOOD_GROUPS } from "../../utils/constants";
-import { formatDate } from "../../utils/dateFormatter";
+import { BLOOD_GROUPS, DEFAULT_AVATAR } from "../../utils/constants";
 
 const Search = () => {
-  const { districts, loading, getUpazilasByDistrict } = useLocationData();
+  const { districts, getUpazilasByDistrict, loading: locationLoading } =
+    useLocationData();
 
-  const [formData, setFormData] = useState({
-    bloodGroup: "",
-    districtId: "",
-    upazilaId: "",
-  });
-
+  const [bloodGroup, setBloodGroup] = useState("");
+  const [district, setDistrict] = useState("");
+  const [upazila, setUpazila] = useState("");
+  const [donors, setDonors] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
-  const [results, setResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const filteredUpazilas = useMemo(
-    () => getUpazilasByDistrict(formData.districtId),
-    [formData.districtId, getUpazilasByDistrict]
+  const selectedDistrict = useMemo(
+    () => districts.find((item) => item.name === district),
+    [districts, district]
   );
 
-  const selectedDistrict = districts.find(
-    (district) => String(district.id) === String(formData.districtId)
-  );
+  const upazilaOptions = useMemo(() => {
+    if (!selectedDistrict?.id) return [];
+    return getUpazilasByDistrict(selectedDistrict.id);
+  }, [selectedDistrict, getUpazilasByDistrict]);
 
-  const selectedUpazila = filteredUpazilas.find(
-    (upazila) => String(upazila.id) === String(formData.upazilaId)
-  );
-
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-
-    setFormData((currentData) => ({
-      ...currentData,
-      [name]: value,
-      ...(name === "districtId" ? { upazilaId: "" } : {}),
-    }));
+  const handleDistrictChange = (value) => {
+    setDistrict(value);
+    setUpazila("");
   };
 
-  const handleSearch = (event) => {
+  const handleSearch = async (event) => {
     event.preventDefault();
 
-    const districtName = selectedDistrict?.name || "";
-    const upazilaName = selectedUpazila?.name || "";
+    if (!bloodGroup || !district || !upazila) {
+      toast.error("Please select blood group, district and upazila.");
+      return;
+    }
 
-    const matchedDonors = donorMockData.filter((donor) => {
-      const isBloodMatch = donor.bloodGroup === formData.bloodGroup;
-      const isDistrictMatch = donor.district === districtName;
-      const isUpazilaMatch = donor.upazila === upazilaName;
-      const isActive = donor.status === "active";
-
-      return isBloodMatch && isDistrictMatch && isUpazilaMatch && isActive;
-    });
-
-    setResults(matchedDonors);
+    setIsSearching(true);
     setHasSearched(true);
-  };
 
-  const handleReset = () => {
-    setFormData({
-      bloodGroup: "",
-      districtId: "",
-      upazilaId: "",
-    });
+    try {
+      const { data } = await axiosPublic.get("/api/users/search-donors", {
+        params: {
+          bloodGroup,
+          district,
+          upazila,
+        },
+      });
 
-    setResults([]);
-    setHasSearched(false);
+      setDonors(data?.donors || []);
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error.message ||
+          "Failed to search donors."
+      );
+      setDonors([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   return (
     <section className="bg-surface-page py-10 sm:py-14">
-      <div className="sc-container space-y-6">
-        <PageHeader
-          eyebrow="Search Donors"
-          title="Search available blood donors"
-          description="Select blood group, district and upazila, then click search to find matching active donors."
-          icon="search"
-        />
+      <div className="sc-container space-y-8">
+        <div className="sc-card p-6 sm:p-8">
+          <div className="flex items-start gap-5">
+            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+              <span className="material-symbols-rounded text-4xl">search</span>
+            </span>
 
-        <form onSubmit={handleSearch} className="sc-card p-5 sm:p-6">
-          <div className="grid gap-5 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-primary">
+                Search Donors
+              </p>
+
+              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+                Find matching blood donors
+              </h1>
+
+              <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-ink-muted">
+                Select blood group, district and upazila to search active donors.
+                By default, no donor data is shown until you search.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSearch} className="sc-card p-6 sm:p-8">
+          <div className="grid gap-5 md:grid-cols-4">
             <div>
               <label className="sc-label">Blood Group</label>
               <select
-                name="bloodGroup"
-                value={formData.bloodGroup}
-                onChange={handleChange}
+                value={bloodGroup}
+                onChange={(event) => setBloodGroup(event.target.value)}
                 className="sc-select mt-2"
                 required
               >
@@ -107,20 +114,19 @@ const Search = () => {
             <div>
               <label className="sc-label">District</label>
               <select
-                name="districtId"
-                value={formData.districtId}
-                onChange={handleChange}
+                value={district}
+                onChange={(event) => handleDistrictChange(event.target.value)}
+                disabled={locationLoading}
                 className="sc-select mt-2"
-                disabled={loading}
                 required
               >
                 <option value="">
-                  {loading ? "Loading districts..." : "Select district"}
+                  {locationLoading ? "Loading districts..." : "Select district"}
                 </option>
 
-                {districts.map((district) => (
-                  <option key={district.id} value={district.id}>
-                    {district.name}
+                {districts.map((item) => (
+                  <option key={item.id} value={item.name}>
+                    {item.name}
                   </option>
                 ))}
               </select>
@@ -129,139 +135,142 @@ const Search = () => {
             <div>
               <label className="sc-label">Upazila</label>
               <select
-                name="upazilaId"
-                value={formData.upazilaId}
-                onChange={handleChange}
+                value={upazila}
+                onChange={(event) => setUpazila(event.target.value)}
+                disabled={!district || locationLoading}
                 className="sc-select mt-2"
-                disabled={!formData.districtId || loading}
                 required
               >
                 <option value="">
-                  {!formData.districtId
-                    ? "Select district first"
-                    : "Select upazila"}
+                  {district ? "Select upazila" : "Select district first"}
                 </option>
 
-                {filteredUpazilas.map((upazila) => (
-                  <option key={upazila.id} value={upazila.id}>
-                    {upazila.name}
+                {upazilaOptions.map((item) => (
+                  <option key={item.id} value={item.name}>
+                    {item.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div className="flex gap-3">
-              <Button type="submit" icon="search">
-                Search
-              </Button>
-
+            <div className="flex items-end">
               <Button
-                type="button"
-                variant="secondary"
-                icon="restart_alt"
-                onClick={handleReset}
+                type="submit"
+                icon="search"
+                disabled={isSearching}
+                className="w-full"
               >
-                Reset
+                {isSearching ? "Searching..." : "Search"}
               </Button>
             </div>
           </div>
         </form>
 
-        {!hasSearched ? (
-          <EmptyState
-            icon="manage_search"
-            title="Search to view donor results"
-            description="By default this page does not show donor data. Fill the search form and click the search button to view matching donors."
-          />
-        ) : results.length === 0 ? (
-          <EmptyState
-            icon="person_search"
-            title="No matching donor found"
-            description="No active donor matched your selected blood group, district and upazila."
-          />
-        ) : (
-          <section className="space-y-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-2xl font-extrabold tracking-tight text-ink">
-                  Search Results
-                </h2>
-                <p className="mt-1 text-sm font-semibold text-ink-muted">
-                  Matching active donors based on your selected location and
-                  blood group.
-                </p>
-              </div>
+        <section className="sc-card overflow-hidden">
+          <div className="border-b border-surface-border p-5 sm:p-6">
+            <h2 className="text-2xl font-extrabold tracking-tight text-ink">
+              Search Results
+            </h2>
 
-              <StatusBadge status="active" label={`${results.length} Donors`} />
+            <p className="mt-1 text-sm font-semibold text-ink-muted">
+              {hasSearched
+                ? `${donors.length} matching donor found.`
+                : "No donor data is shown before searching."}
+            </p>
+          </div>
+
+          {isSearching ? (
+            <div className="p-10">
+              <Loader />
             </div>
-
-            <div className="grid gap-5 lg:grid-cols-3">
-              {results.map((donor) => (
-                <article key={donor.id} className="sc-card p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-primary-tint text-primary">
-                        <span className="material-symbols-rounded text-3xl">
-                          person
-                        </span>
-                      </div>
-
-                      <div>
-                        <h3 className="font-extrabold text-ink">
-                          {donor.name}
-                        </h3>
-                        <p className="text-xs font-semibold text-ink-muted">
-                          {donor.email}
-                        </p>
-                      </div>
-                    </div>
-
-                    <BloodBadge group={donor.bloodGroup} size="sm" />
-                  </div>
-
-                  <div className="mt-5 space-y-3">
-                    <InfoRow
-                      icon="location_on"
-                      label="Location"
-                      value={`${donor.district}, ${donor.upazila}`}
-                    />
-
-                    <InfoRow icon="call" label="Phone" value={donor.phone} />
-
-                    <InfoRow
-                      icon="event_available"
-                      label="Last Donation"
-                      value={formatDate(donor.lastDonationDate)}
-                    />
-                  </div>
-
-                  <div className="mt-5 flex items-center justify-between rounded-[22px] border border-surface-border bg-surface-soft p-4">
-                    <p className="text-sm font-extrabold text-ink-muted">
-                      Donor Status
-                    </p>
-                    <StatusBadge status={donor.status} />
-                  </div>
-                </article>
+          ) : !hasSearched ? (
+            <EmptySearchState
+              icon="manage_search"
+              title="Search to view donors"
+              description="Choose blood group, district and upazila, then click search."
+            />
+          ) : donors.length === 0 ? (
+            <EmptySearchState
+              icon="person_off"
+              title="No matching donor found"
+              description="Try a different blood group, district or upazila."
+            />
+          ) : (
+            <div className="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-3 sm:p-6">
+              {donors.map((donor) => (
+                <DonorCard key={donor._id || donor.id || donor.email} donor={donor} />
               ))}
             </div>
-          </section>
-        )}
+          )}
+        </section>
       </div>
     </section>
   );
 };
 
-const InfoRow = ({ icon, label, value }) => {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] bg-primary-tint text-primary">
-        <span className="material-symbols-rounded text-xl">{icon}</span>
-      </span>
+const DonorCard = ({ donor }) => {
+  const avatar =
+    donor.avatar || donor.image || donor.photoURL || DEFAULT_AVATAR;
 
+  return (
+    <article className="rounded-[28px] border border-surface-border bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <img
+            src={avatar}
+            alt={donor.name || "Donor avatar"}
+            className="h-14 w-14 rounded-[20px] object-cover"
+          />
+
+          <div>
+            <h3 className="text-lg font-extrabold tracking-tight text-ink">
+              {donor.name || "Scaffold Donor"}
+            </h3>
+
+            <p className="mt-1 text-xs font-semibold text-ink-muted">
+              {donor.email}
+            </p>
+          </div>
+        </div>
+
+        <BloodBadge group={donor.bloodGroup} size="sm" />
+      </div>
+
+      <div className="mt-5 space-y-3">
+        <DonorInfo icon="location_on" label="District" value={donor.district} />
+        <DonorInfo icon="near_me" label="Upazila" value={donor.upazila} />
+        <DonorInfo icon="verified" label="Status" value={donor.status || "active"} />
+      </div>
+    </article>
+  );
+};
+
+const DonorInfo = ({ icon, label, value }) => {
+  return (
+    <div className="flex items-center gap-3 rounded-[18px] bg-surface-soft p-3">
+      <span className="material-symbols-rounded text-primary">{icon}</span>
       <div>
         <p className="text-xs font-bold text-ink-muted">{label}</p>
-        <p className="text-sm font-extrabold text-ink">{value}</p>
+        <p className="text-sm font-extrabold text-ink">{value || "N/A"}</p>
       </div>
+    </div>
+  );
+};
+
+const EmptySearchState = ({ icon, title, description }) => {
+  return (
+    <div className="p-10 text-center">
+      <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+        <span className="material-symbols-rounded text-4xl">{icon}</span>
+      </span>
+
+      <h3 className="mt-5 text-2xl font-extrabold tracking-tight text-ink">
+        {title}
+      </h3>
+
+      <p className="mx-auto mt-2 max-w-xl text-sm font-semibold leading-6 text-ink-muted">
+        {description}
+      </p>
     </div>
   );
 };

@@ -1,94 +1,179 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import Swal from "sweetalert2";
 import toast from "react-hot-toast";
+import axiosPublic from "../../api/axiosPublic";
 import BloodBadge from "../../components/common/BloodBadge";
 import Button from "../../components/common/Button";
-import EmptyState from "../../components/common/EmptyState";
-import PageHeader from "../../components/common/PageHeader";
+import Loader from "../../components/common/Loader";
 import StatusBadge from "../../components/common/StatusBadge";
 import useAuth from "../../hooks/useAuth";
-import { recentDonationRequests } from "../../data/dashboardMockData";
-import confirmModal from "../../utils/confirmModal";
+import { DONATION_STATUS_OPTIONS } from "../../utils/constants";
 import { formatDate } from "../../utils/dateFormatter";
 
-const statusFilters = ["all", "pending", "inprogress", "done", "canceled"];
+const REQUESTS_PER_PAGE = 10;
+
+const filterOptions = [
+  { label: "All", value: "" },
+  ...DONATION_STATUS_OPTIONS,
+];
 
 const MyDonationRequests = () => {
   const { user, dbUser } = useAuth();
 
-  const requesterName = dbUser?.name || user?.displayName || "Scaffold User";
-  const requesterEmail = dbUser?.email || user?.email || "user@scaffold.com";
+  const [requests, setRequests] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRequests, setTotalRequests] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const ownMockRequests = useMemo(
-    () =>
-      recentDonationRequests.map((request) => ({
-        ...request,
-        requesterName,
-        requesterEmail,
-      })),
-    [requesterEmail, requesterName]
+  const requesterEmail = dbUser?.email || user?.email || "";
+
+  const loadMyRequests = async (page = 1, status = statusFilter) => {
+    setLoading(true);
+
+    try {
+      const { data } = await axiosPublic.get("/api/donation-requests/my", {
+        params: {
+          page,
+          limit: REQUESTS_PER_PAGE,
+          status: status || undefined,
+        },
+      });
+
+      setRequests(data?.requests || []);
+      setTotalRequests(data?.total || 0);
+      setTotalPages(data?.totalPages || 0);
+      setCurrentPage(data?.page || page);
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error.message ||
+          "Failed to load your donation requests."
+      );
+
+      setRequests([]);
+      setTotalRequests(0);
+      setTotalPages(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMyRequests(currentPage, statusFilter);
+  }, [currentPage, statusFilter]);
+
+  const handleStatusFilter = (status) => {
+    setStatusFilter(status);
+    setCurrentPage(1);
+  };
+
+  const handleDeleteRequest = async (requestId) => {
+    const confirmResult = await Swal.fire({
+      title: "Delete this request?",
+      text: "This action cannot be undone.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#C1121F",
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    try {
+      await axiosPublic.delete(`/api/donation-requests/${requestId}`);
+      toast.success("Donation request deleted successfully.");
+      await loadMyRequests(currentPage, statusFilter);
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error.message ||
+          "Failed to delete donation request."
+      );
+    }
+  };
+
+  const handleStatusUpdate = async (requestId, status) => {
+    const label = status === "done" ? "mark as done" : "cancel";
+
+    const confirmResult = await Swal.fire({
+      title: `Are you sure?`,
+      text: `Do you want to ${label} this request?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, confirm",
+      cancelButtonText: "No",
+      confirmButtonColor: "#C1121F",
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    try {
+      await axiosPublic.patch(`/api/donation-requests/${requestId}/status`, {
+        status,
+      });
+
+      toast.success(`Request status updated to ${status}.`);
+      await loadMyRequests(currentPage, statusFilter);
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error.message ||
+          "Failed to update request status."
+      );
+    }
+  };
+
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber < 1 || pageNumber > totalPages) return;
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const pageNumbers = Array.from(
+    { length: totalPages },
+    (_, index) => index + 1
   );
 
-  const [requests, setRequests] = useState(ownMockRequests);
-  const [activeStatus, setActiveStatus] = useState("all");
-
-  const filteredRequests = useMemo(() => {
-    if (activeStatus === "all") return requests;
-
-    return requests.filter((request) => request.status === activeStatus);
-  }, [activeStatus, requests]);
-
-  const handleStatusChange = async (requestId, status) => {
-    const confirmed = await confirmModal({
-      title: "Update donation status?",
-      text: `This request status will be changed to ${status}.`,
-      confirmButtonText: "Yes, update",
-      icon: "question",
-    });
-
-    if (!confirmed) return;
-
-    setRequests((currentRequests) =>
-      currentRequests.map((request) =>
-        request.id === requestId ? { ...request, status } : request
-      )
-    );
-
-    toast.success(`Donation request marked as ${status}.`);
-  };
-
-  const handleDelete = async (requestId) => {
-    const confirmed = await confirmModal({
-      title: "Delete this request?",
-      text: "This donation request will be removed from your list.",
-      confirmButtonText: "Yes, delete",
-      icon: "warning",
-    });
-
-    if (!confirmed) return;
-
-    setRequests((currentRequests) =>
-      currentRequests.filter((request) => request.id !== requestId)
-    );
-
-    toast.success("Donation request deleted successfully.");
-  };
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="My Requests"
-        title="My blood donation requests"
-        description="View, filter, update, edit and manage all blood donation requests created by your account."
-        icon="list_alt"
-        action={
-          <Link to="/dashboard/create-donation-request">
-            <Button icon="add_circle">Create Request</Button>
-          </Link>
-        }
-      />
+    <section className="space-y-8">
+      <div className="sc-card p-6 sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-5">
+            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+              <span className="material-symbols-rounded text-4xl">
+                list_alt
+              </span>
+            </span>
 
-      <section className="sc-card p-5 sm:p-6">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-primary">
+                My Requests
+              </p>
+
+              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+                My blood donation requests
+              </h1>
+
+              <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-ink-muted">
+                View, filter, update, edit and manage all blood donation
+                requests created by your account.
+              </p>
+            </div>
+          </div>
+
+          <Link to="/dashboard/create-donation-request">
+            <Button icon="add_circle" size="lg">
+              Create Request
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      <div className="sc-card p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-xl font-extrabold tracking-tight text-ink">
@@ -96,61 +181,73 @@ const MyDonationRequests = () => {
             </h2>
 
             <p className="mt-1 text-sm font-semibold text-ink-muted">
-              Filter your donation requests by donation status.
+              Showing requests created by: {requesterEmail}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {statusFilters.map((status) => (
-              <Button
-                key={status}
-                size="sm"
-                variant={activeStatus === status ? "primary" : "secondary"}
-                onClick={() => setActiveStatus(status)}
+            {filterOptions.map((option) => (
+              <button
+                key={option.value || "all"}
+                type="button"
+                onClick={() => handleStatusFilter(option.value)}
+                className={[
+                  "rounded-2xl px-5 py-3 text-sm font-extrabold transition",
+                  statusFilter === option.value
+                    ? "bg-primary text-white shadow-soft"
+                    : "border border-surface-border bg-white text-ink hover:bg-primary-tint hover:text-primary",
+                ].join(" ")}
               >
-                {status === "all"
-                  ? "All"
-                  : status === "inprogress"
-                    ? "In Progress"
-                    : status.charAt(0).toUpperCase() + status.slice(1)}
-              </Button>
+                {option.label}
+              </button>
             ))}
           </div>
         </div>
-      </section>
+      </div>
 
       <section className="sc-card overflow-hidden">
-        <div className="border-b border-surface-border p-5 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-xl font-extrabold tracking-tight text-ink">
-                My Request Table
-              </h2>
+        <div className="flex flex-col gap-3 border-b border-surface-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div>
+            <h2 className="text-2xl font-extrabold tracking-tight text-ink">
+              My Request Table
+            </h2>
 
-              <p className="mt-1 text-sm font-semibold text-ink-muted">
-                Showing requests created by: {requesterEmail}
-              </p>
-            </div>
-
-            <StatusBadge
-              status="active"
-              label={`${filteredRequests.length} Showing`}
-            />
+            <p className="mt-1 text-sm font-semibold text-ink-muted">
+              Total {totalRequests} request found.
+            </p>
           </div>
+
+          <span className="w-fit rounded-full bg-green-100 px-4 py-2 text-xs font-extrabold text-green-700">
+            {requests.length} Showing
+          </span>
         </div>
 
-        {filteredRequests.length === 0 ? (
-          <div className="p-5 sm:p-6">
-            <EmptyState
-              icon="playlist_remove"
-              title="No donation requests found"
-              description="No request matched your selected filter."
-              action={
-                <Link to="/dashboard/create-donation-request">
-                  <Button icon="add_circle">Create Request</Button>
-                </Link>
-              }
-            />
+        {loading ? (
+          <div className="p-10">
+            <Loader />
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="p-10 text-center">
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+              <span className="material-symbols-rounded text-4xl">
+                inventory_2
+              </span>
+            </span>
+
+            <h3 className="mt-5 text-2xl font-extrabold tracking-tight text-ink">
+              No request found
+            </h3>
+
+            <p className="mx-auto mt-2 max-w-xl text-sm font-semibold leading-6 text-ink-muted">
+              Create your first blood donation request to manage it from this
+              page.
+            </p>
+
+            <div className="mt-6">
+              <Link to="/dashboard/create-donation-request">
+                <Button icon="add_circle">Create Request</Button>
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -168,123 +265,181 @@ const MyDonationRequests = () => {
               </thead>
 
               <tbody>
-                {filteredRequests.map((request) => (
-                  <tr key={request.id} className="border-surface-border">
-                    <td>
-                      <BloodBadge group={request.bloodGroup} size="sm" />
-                    </td>
+                {requests.map((request) => {
+                  const requestId = request.id || request._id;
+                  const locationText = `${
+                    request.district || request.recipientDistrict || "N/A"
+                  }, ${request.upazila || request.recipientUpazila || "N/A"}`;
 
-                    <td>
-                      <p className="font-extrabold text-ink">
-                        {request.recipientName}
-                      </p>
-                      <p className="text-xs font-semibold text-ink-muted">
-                        ID: {request.id}
-                      </p>
-                    </td>
+                  return (
+                    <tr key={requestId} className="border-surface-border">
+                      <td>
+                        <BloodBadge group={request.bloodGroup} size="sm" />
+                      </td>
 
-                    <td>
-                      <p className="font-bold text-ink">{request.district}</p>
-                      <p className="text-xs font-semibold text-ink-muted">
-                        {request.upazila}
-                      </p>
-                    </td>
-
-                    <td>
-                      <p className="font-bold text-ink">
-                        {formatDate(request.donationDate)}
-                      </p>
-                      <p className="text-xs font-semibold text-ink-muted">
-                        {request.donationTime}
-                      </p>
-                    </td>
-
-                    <td>
-                      <StatusBadge status={request.status} />
-                    </td>
-
-                    <td>
-                      {request.status === "inprogress" &&
-                      request.donorEmail ? (
-                        <div>
-                          <p className="font-bold text-ink">
-                            {request.donorName}
-                          </p>
-                          <p className="text-xs font-semibold text-ink-muted">
-                            {request.donorEmail}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-xs font-bold text-ink-muted">
-                          Not assigned
+                      <td>
+                        <p className="font-extrabold text-ink">
+                          {request.recipientName}
                         </p>
-                      )}
-                    </td>
 
-                    <td>
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Link to={`/donation-requests/${request.id}`}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            icon="visibility"
+                        <p className="mt-1 text-xs font-semibold text-ink-muted">
+                          ID: {requestId}
+                        </p>
+                      </td>
+
+                      <td>
+                        <p className="font-bold text-ink">{locationText}</p>
+
+                        <p className="mt-1 text-xs font-semibold text-ink-muted">
+                          {request.hospitalName}
+                        </p>
+                      </td>
+
+                      <td>
+                        <p className="font-bold text-ink">
+                          {formatDate(request.donationDate)}
+                        </p>
+
+                        <p className="mt-1 text-xs font-semibold text-ink-muted">
+                          {request.donationTime}
+                        </p>
+                      </td>
+
+                      <td>
+                        <StatusBadge status={request.status} />
+                      </td>
+
+                      <td>
+                        {request.donorEmail ? (
+                          <div>
+                            <p className="font-bold text-ink">
+                              {request.donorName || "Unknown"}
+                            </p>
+
+                            <p className="mt-1 text-xs font-semibold text-ink-muted">
+                              {request.donorEmail}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-semibold text-ink-muted">
+                            Not assigned
+                          </p>
+                        )}
+                      </td>
+
+                      <td>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Link to={`/donation-requests/${requestId}`}>
+                            <ActionButton icon="visibility" label="View" />
+                          </Link>
+
+                          <Link
+                            to={`/dashboard/update-donation-request/${requestId}`}
                           >
-                            View
-                          </Button>
-                        </Link>
+                            <ActionButton icon="edit" label="Edit" />
+                          </Link>
 
-                        <Link
-                          to={`/dashboard/update-donation-request/${request.id}`}
-                        >
-                          <Button variant="secondary" size="sm" icon="edit">
-                            Edit
-                          </Button>
-                        </Link>
+                          {request.status === "inprogress" ? (
+                            <>
+                              <ActionButton
+                                icon="check_circle"
+                                label="Done"
+                                tone="success"
+                                onClick={() =>
+                                  handleStatusUpdate(requestId, "done")
+                                }
+                              />
 
-                        {request.status === "inprogress" ? (
-                          <>
-                            <Button
-                              variant="success"
-                              size="sm"
-                              icon="task_alt"
-                              onClick={() =>
-                                handleStatusChange(request.id, "done")
-                              }
-                            >
-                              Done
-                            </Button>
+                              <ActionButton
+                                icon="cancel"
+                                label="Cancel"
+                                tone="warning"
+                                onClick={() =>
+                                  handleStatusUpdate(requestId, "canceled")
+                                }
+                              />
+                            </>
+                          ) : null}
 
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              icon="cancel"
-                              onClick={() =>
-                                handleStatusChange(request.id, "canceled")
-                              }
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        ) : null}
-
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          icon="delete"
-                          onClick={() => handleDelete(request.id)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          <ActionButton
+                            icon="delete"
+                            label="Delete"
+                            tone="danger"
+                            onClick={() => handleDeleteRequest(requestId)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </section>
-    </div>
+
+      {totalPages > 1 ? (
+        <section className="flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="rounded-2xl border border-surface-border bg-white px-5 py-3 text-sm font-extrabold text-ink-muted transition hover:bg-primary-tint hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Prev
+          </button>
+
+          {pageNumbers.map((pageNumber) => (
+            <button
+              key={pageNumber}
+              type="button"
+              onClick={() => handlePageChange(pageNumber)}
+              className={[
+                "flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-extrabold transition",
+                currentPage === pageNumber
+                  ? "bg-primary text-white shadow-soft"
+                  : "border border-surface-border bg-white text-ink-muted hover:bg-primary-tint hover:text-primary",
+              ].join(" ")}
+            >
+              {pageNumber}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="rounded-2xl border border-surface-border bg-white px-5 py-3 text-sm font-extrabold text-ink-muted transition hover:bg-primary-tint hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+          </button>
+        </section>
+      ) : null}
+    </section>
+  );
+};
+
+const ActionButton = ({ icon, label, tone = "default", onClick }) => {
+  const toneClass = {
+    default:
+      "border-surface-border bg-white text-ink hover:bg-primary-tint hover:text-primary",
+    success: "border-green-100 bg-green-600 text-white hover:bg-green-700",
+    warning: "border-amber-100 bg-amber-500 text-white hover:bg-amber-600",
+    danger: "border-red-100 bg-red-600 text-white hover:bg-red-700",
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-xs font-extrabold transition",
+        toneClass[tone],
+      ].join(" ")}
+    >
+      <span className="material-symbols-rounded text-lg">{icon}</span>
+      {label}
+    </button>
   );
 };
 

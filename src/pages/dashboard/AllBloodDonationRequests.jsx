@@ -1,190 +1,181 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import Swal from "sweetalert2";
 import toast from "react-hot-toast";
+import axiosPublic from "../../api/axiosPublic";
 import BloodBadge from "../../components/common/BloodBadge";
 import Button from "../../components/common/Button";
-import EmptyState from "../../components/common/EmptyState";
-import PageHeader from "../../components/common/PageHeader";
+import Loader from "../../components/common/Loader";
 import StatusBadge from "../../components/common/StatusBadge";
 import useAuth from "../../hooks/useAuth";
-import confirmModal from "../../utils/confirmModal";
+import { DONATION_STATUS_OPTIONS } from "../../utils/constants";
 import { formatDate } from "../../utils/dateFormatter";
 
-const initialRequests = [
-  {
-    id: "REQ-1001",
-    requesterName: "Nusrat Jahan",
-    requesterEmail: "nusrat@example.com",
-    requesterPhone: "01700000001",
-    recipientName: "Arif Hossain",
-    bloodGroup: "A+",
-    district: "Dhaka",
-    upazila: "Dhanmondi",
-    hospitalName: "Popular Medical College Hospital",
-    fullAddress: "House 12, Road 7, Dhanmondi, Dhaka",
-    donationDate: "2026-06-20",
-    donationTime: "10:30 AM",
-    requestMessage:
-      "The patient needs urgent blood support before surgery. Please contact the requester before visiting the hospital.",
-    status: "pending",
-    donorName: "",
-    donorEmail: "",
-  },
-  {
-    id: "REQ-1002",
-    requesterName: "Mehedi Hasan",
-    requesterEmail: "mehedi@example.com",
-    requesterPhone: "01700000002",
-    recipientName: "Tanvir Ahmed",
-    bloodGroup: "O-",
-    district: "Chattogram",
-    upazila: "Panchlaish",
-    hospitalName: "Chattogram Medical College Hospital",
-    fullAddress: "Ward 18, Panchlaish, Chattogram",
-    donationDate: "2026-06-21",
-    donationTime: "02:00 PM",
-    requestMessage:
-      "Emergency blood support is needed for the recipient. Please confirm availability before going to the hospital.",
-    status: "inprogress",
-    donorName: "Rafi Ahmed",
-    donorEmail: "rafi@example.com",
-  },
-  {
-    id: "REQ-1003",
-    requesterName: "Sadia Rahman",
-    requesterEmail: "sadia@example.com",
-    requesterPhone: "01700000003",
-    recipientName: "Mim Akter",
-    bloodGroup: "B+",
-    district: "Sylhet",
-    upazila: "Sylhet Sadar",
-    hospitalName: "MAG Osmani Medical College Hospital",
-    fullAddress: "Medical Road, Sylhet Sadar, Sylhet",
-    donationDate: "2026-06-22",
-    donationTime: "11:00 AM",
-    requestMessage:
-      "The recipient needs blood for emergency treatment. Donor should contact requester for exact hospital instructions.",
-    status: "done",
-    donorName: "Hasan Mahmud",
-    donorEmail: "hasan@example.com",
-  },
-  {
-    id: "REQ-1004",
-    requesterName: "Rahim Uddin",
-    requesterEmail: "rahim@example.com",
-    requesterPhone: "01700000004",
-    recipientName: "Karim Mia",
-    bloodGroup: "AB-",
-    district: "Rajshahi",
-    upazila: "Boalia",
-    hospitalName: "Rajshahi Medical College Hospital",
-    fullAddress: "Boalia Main Road, Rajshahi",
-    donationDate: "2026-06-23",
-    donationTime: "04:30 PM",
-    requestMessage:
-      "Blood is needed for urgent treatment. Please contact the requester before visiting the hospital.",
-    status: "canceled",
-    donorName: "",
-    donorEmail: "",
-  },
-];
+const REQUESTS_PER_PAGE = 10;
 
-const statusFilters = ["all", "pending", "inprogress", "done", "canceled"];
+const filterOptions = [{ label: "All", value: "" }, ...DONATION_STATUS_OPTIONS];
 
 const AllBloodDonationRequests = () => {
-  const { dbUser } = useAuth();
+  const { isAdmin, isVolunteer } = useAuth();
 
-  const role = dbUser?.role || "donor";
-  const isAdmin = role === "admin";
+  const [requests, setRequests] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRequests, setTotalRequests] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const [requests, setRequests] = useState(initialRequests);
-  const [activeStatus, setActiveStatus] = useState("all");
+  const canManageFullRequest = isAdmin;
+  const canUpdateStatus = isAdmin || isVolunteer;
 
-  const filteredRequests = useMemo(() => {
-    if (activeStatus === "all") return requests;
+  const loadAllRequests = async (page = 1, status = statusFilter) => {
+    setLoading(true);
 
-    return requests.filter((request) => request.status === activeStatus);
-  }, [activeStatus, requests]);
+    try {
+      const { data } = await axiosPublic.get("/api/donation-requests/all", {
+        params: {
+          page,
+          limit: REQUESTS_PER_PAGE,
+          status: status || undefined,
+        },
+      });
 
-  const handleStatusChange = async (requestId, status) => {
-    const confirmed = await confirmModal({
+      setRequests(data?.requests || []);
+      setTotalRequests(data?.total || 0);
+      setTotalPages(data?.totalPages || 0);
+      setCurrentPage(data?.page || page);
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error.message ||
+          "Failed to load donation requests."
+      );
+
+      setRequests([]);
+      setTotalRequests(0);
+      setTotalPages(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAllRequests(currentPage, statusFilter);
+  }, [currentPage, statusFilter]);
+
+  const handleStatusFilter = (status) => {
+    setStatusFilter(status);
+    setCurrentPage(1);
+  };
+
+  const handleStatusUpdate = async (requestId, status) => {
+    const confirmResult = await Swal.fire({
       title: "Update request status?",
-      text: `This donation request status will be changed to ${status}.`,
-      confirmButtonText: "Yes, update",
+      text: `This donation request status will be updated to ${status}.`,
       icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, update",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#C1121F",
     });
 
-    if (!confirmed) return;
+    if (!confirmResult.isConfirmed) return;
 
-    setRequests((currentRequests) =>
-      currentRequests.map((request) =>
-        request.id === requestId ? { ...request, status } : request
-      )
-    );
+    try {
+      await axiosPublic.patch(`/api/donation-requests/${requestId}/status`, {
+        status,
+      });
 
-    toast.success(`Donation request status updated to ${status}.`);
+      toast.success(`Request status updated to ${status}.`);
+      await loadAllRequests(currentPage, statusFilter);
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error.message ||
+          "Failed to update request status."
+      );
+    }
   };
 
   const handleDeleteRequest = async (requestId) => {
-    const confirmed = await confirmModal({
+    const confirmResult = await Swal.fire({
       title: "Delete this request?",
-      text: "Only admin can delete donation requests.",
-      confirmButtonText: "Yes, delete",
+      text: "This action cannot be undone.",
       icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#C1121F",
     });
 
-    if (!confirmed) return;
+    if (!confirmResult.isConfirmed) return;
 
-    setRequests((currentRequests) =>
-      currentRequests.filter((request) => request.id !== requestId)
-    );
+    try {
+      await axiosPublic.delete(`/api/donation-requests/${requestId}`);
 
-    toast.success("Donation request deleted successfully.");
+      toast.success("Donation request deleted successfully.");
+      await loadAllRequests(currentPage, statusFilter);
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error.message ||
+          "Failed to delete donation request."
+      );
+    }
   };
 
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber < 1 || pageNumber > totalPages) return;
+
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const pageNumbers = Array.from(
+    { length: totalPages },
+    (_, index) => index + 1
+  );
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Volunteer / Admin"
-        title="All blood donation requests"
-        description={
-          isAdmin
-            ? "Admin can review all requests, update status, and delete invalid requests."
-            : "Volunteer can review all requests and update donation status only."
-        }
-        icon="assignment"
-      />
+    <section className="space-y-8">
+      <div className="sc-card p-6 sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-5">
+            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+              <span className="material-symbols-rounded text-4xl">
+                volunteer_activism
+              </span>
+            </span>
 
-      <section className="grid gap-4 sm:grid-cols-4">
-        <SummaryCard
-          label="Total"
-          value={requests.length}
-          status="active"
-          icon="assignment"
-        />
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-primary">
+                All Blood Donation Requests
+              </p>
 
-        <SummaryCard
-          label="Pending"
-          value={requests.filter((item) => item.status === "pending").length}
-          status="pending"
-          icon="pending_actions"
-        />
+              <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+                Manage donation requests
+              </h1>
 
-        <SummaryCard
-          label="In Progress"
-          value={requests.filter((item) => item.status === "inprogress").length}
-          status="inprogress"
-          icon="sync"
-        />
+              <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-ink-muted">
+                Admin can manage all requests. Volunteers can view all requests
+                and update status only.
+              </p>
+            </div>
+          </div>
 
-        <SummaryCard
-          label="Completed"
-          value={requests.filter((item) => item.status === "done").length}
-          status="done"
-          icon="task_alt"
-        />
-      </section>
+          <div className="rounded-[24px] border border-surface-border bg-white px-6 py-4 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-muted">
+              Total Requests
+            </p>
 
-      <section className="sc-card p-5 sm:p-6">
+            <p className="mt-1 text-3xl font-extrabold text-primary">
+              {totalRequests}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="sc-card p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-xl font-extrabold tracking-tight text-ink">
@@ -192,237 +183,274 @@ const AllBloodDonationRequests = () => {
             </h2>
 
             <p className="mt-1 text-sm font-semibold text-ink-muted">
-              Filter all donation requests by current status.
+              Filter all donation requests by status.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {statusFilters.map((status) => (
-              <Button
-                key={status}
-                size="sm"
-                variant={activeStatus === status ? "primary" : "secondary"}
-                onClick={() => setActiveStatus(status)}
+            {filterOptions.map((option) => (
+              <button
+                key={option.value || "all"}
+                type="button"
+                onClick={() => handleStatusFilter(option.value)}
+                className={[
+                  "rounded-2xl px-5 py-3 text-sm font-extrabold transition",
+                  statusFilter === option.value
+                    ? "bg-primary text-white shadow-soft"
+                    : "border border-surface-border bg-white text-ink hover:bg-primary-tint hover:text-primary",
+                ].join(" ")}
               >
-                {status === "all"
-                  ? "All"
-                  : status === "inprogress"
-                    ? "In Progress"
-                    : status.charAt(0).toUpperCase() + status.slice(1)}
-              </Button>
+                {option.label}
+              </button>
             ))}
           </div>
         </div>
-      </section>
+      </div>
 
       <section className="sc-card overflow-hidden">
-        <div className="border-b border-surface-border p-5 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-xl font-extrabold tracking-tight text-ink">
-                Donation Request Management Table
-              </h2>
+        <div className="flex flex-col gap-3 border-b border-surface-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div>
+            <h2 className="text-2xl font-extrabold tracking-tight text-ink">
+              Request Table
+            </h2>
 
-              <p className="mt-1 text-sm font-semibold text-ink-muted">
-                Showing {filteredRequests.length} request
-                {filteredRequests.length === 1 ? "" : "s"} for current filter.
-              </p>
-            </div>
-
-            <StatusBadge
-              status={isAdmin ? "admin" : "volunteer"}
-              label={isAdmin ? "Admin Control" : "Volunteer Status Control"}
-            />
+            <p className="mt-1 text-sm font-semibold text-ink-muted">
+              Showing {requests.length} of {totalRequests} donation requests.
+            </p>
           </div>
+
+          <span className="w-fit rounded-full bg-primary-tint px-4 py-2 text-xs font-extrabold text-primary">
+            {isAdmin ? "Admin Full Access" : "Volunteer Status Access"}
+          </span>
         </div>
 
-        {filteredRequests.length === 0 ? (
-          <div className="p-5 sm:p-6">
-            <EmptyState
-              icon="assignment_late"
-              title="No donation request found"
-              description="No blood donation request matched your selected filter."
-            />
+        {loading ? (
+          <div className="p-10">
+            <Loader />
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="p-10 text-center">
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+              <span className="material-symbols-rounded text-4xl">
+                inventory_2
+              </span>
+            </span>
+
+            <h3 className="mt-5 text-2xl font-extrabold tracking-tight text-ink">
+              No donation request found
+            </h3>
+
+            <p className="mx-auto mt-2 max-w-xl text-sm font-semibold leading-6 text-ink-muted">
+              Donation requests will appear here when users create them.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="table">
               <thead>
                 <tr className="border-surface-border text-xs uppercase tracking-[0.12em] text-ink-muted">
-                  <th>Requester</th>
-                  <th>Recipient</th>
                   <th>Blood</th>
-                  <th>Hospital</th>
+                  <th>Recipient</th>
+                  <th>Requester</th>
                   <th>Location</th>
                   <th>Date & Time</th>
-                  <th>Donor Info</th>
                   <th>Status</th>
+                  <th>Donor</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
 
               <tbody>
-                {filteredRequests.map((request) => (
-                  <tr key={request.id} className="border-surface-border">
-                    <td>
-                      <p className="font-bold text-ink">
-                        {request.requesterName}
-                      </p>
-                      <p className="text-xs font-semibold text-ink-muted">
-                        {request.requesterEmail}
-                      </p>
-                    </td>
+                {requests.map((request) => {
+                  const requestId = request.id || request._id;
+                  const locationText = `${
+                    request.district || request.recipientDistrict || "N/A"
+                  }, ${request.upazila || request.recipientUpazila || "N/A"}`;
 
-                    <td>
-                      <p className="font-extrabold text-ink">
-                        {request.recipientName}
-                      </p>
-                      <p className="text-xs font-semibold text-ink-muted">
-                        ID: {request.id}
-                      </p>
-                    </td>
+                  return (
+                    <tr key={requestId} className="border-surface-border">
+                      <td>
+                        <BloodBadge group={request.bloodGroup} size="sm" />
+                      </td>
 
-                    <td>
-                      <BloodBadge group={request.bloodGroup} size="sm" />
-                    </td>
-
-                    <td>
-                      <p className="max-w-[220px] font-bold text-ink">
-                        {request.hospitalName}
-                      </p>
-                      <p className="max-w-[220px] text-xs font-semibold text-ink-muted">
-                        {request.fullAddress}
-                      </p>
-                    </td>
-
-                    <td>
-                      <p className="font-bold text-ink">{request.district}</p>
-                      <p className="text-xs font-semibold text-ink-muted">
-                        {request.upazila}
-                      </p>
-                    </td>
-
-                    <td>
-                      <p className="font-bold text-ink">
-                        {formatDate(request.donationDate)}
-                      </p>
-                      <p className="text-xs font-semibold text-ink-muted">
-                        {request.donationTime}
-                      </p>
-                    </td>
-
-                    <td>
-                      {request.donorEmail ? (
-                        <div>
-                          <p className="font-bold text-ink">
-                            {request.donorName}
-                          </p>
-                          <p className="text-xs font-semibold text-ink-muted">
-                            {request.donorEmail}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-xs font-bold text-ink-muted">
-                          Not assigned
+                      <td>
+                        <p className="font-extrabold text-ink">
+                          {request.recipientName}
                         </p>
-                      )}
-                    </td>
 
-                    <td>
-                      <StatusBadge status={request.status} />
-                    </td>
+                        <p className="mt-1 text-xs font-semibold text-ink-muted">
+                          {request.hospitalName}
+                        </p>
+                      </td>
 
-                    <td>
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon="pending_actions"
-                          disabled={request.status === "pending"}
-                          onClick={() =>
-                            handleStatusChange(request.id, "pending")
-                          }
-                        >
-                          Pending
-                        </Button>
+                      <td>
+                        <p className="font-bold text-ink">
+                          {request.requesterName || "Unknown"}
+                        </p>
 
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon="sync"
-                          disabled={request.status === "inprogress"}
-                          onClick={() =>
-                            handleStatusChange(request.id, "inprogress")
-                          }
-                        >
-                          Progress
-                        </Button>
+                        <p className="mt-1 text-xs font-semibold text-ink-muted">
+                          {request.requesterEmail}
+                        </p>
+                      </td>
 
-                        <Button
-                          size="sm"
-                          variant="success"
-                          icon="task_alt"
-                          disabled={request.status === "done"}
-                          onClick={() => handleStatusChange(request.id, "done")}
-                        >
-                          Done
-                        </Button>
+                      <td>
+                        <p className="font-bold text-ink">{locationText}</p>
 
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          icon="cancel"
-                          disabled={request.status === "canceled"}
-                          onClick={() =>
-                            handleStatusChange(request.id, "canceled")
-                          }
-                        >
-                          Cancel
-                        </Button>
+                        <p className="mt-1 text-xs font-semibold text-ink-muted">
+                          {request.fullAddress}
+                        </p>
+                      </td>
 
-                        {isAdmin ? (
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            icon="delete"
-                            onClick={() => handleDeleteRequest(request.id)}
-                          >
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td>
+                        <p className="font-bold text-ink">
+                          {formatDate(request.donationDate)}
+                        </p>
+
+                        <p className="mt-1 text-xs font-semibold text-ink-muted">
+                          {request.donationTime}
+                        </p>
+                      </td>
+
+                      <td>
+                        <StatusBadge status={request.status} />
+                      </td>
+
+                      <td>
+                        {request.donorEmail ? (
+                          <div>
+                            <p className="font-bold text-ink">
+                              {request.donorName || "Unknown"}
+                            </p>
+
+                            <p className="mt-1 text-xs font-semibold text-ink-muted">
+                              {request.donorEmail}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-semibold text-ink-muted">
+                            Not assigned
+                          </p>
+                        )}
+                      </td>
+
+                      <td>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Link to={`/donation-requests/${requestId}`}>
+                            <ActionButton icon="visibility" label="View" />
+                          </Link>
+
+                          {canManageFullRequest ? (
+                            <>
+                              <Link
+                                to={`/dashboard/update-donation-request/${requestId}`}
+                              >
+                                <ActionButton icon="edit" label="Edit" />
+                              </Link>
+
+                              <ActionButton
+                                icon="delete"
+                                label="Delete"
+                                tone="danger"
+                                onClick={() => handleDeleteRequest(requestId)}
+                              />
+                            </>
+                          ) : null}
+
+                          {canUpdateStatus ? (
+                            <StatusSelect
+                              currentStatus={request.status}
+                              onChange={(status) =>
+                                handleStatusUpdate(requestId, status)
+                              }
+                            />
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </section>
-    </div>
+
+      {totalPages > 1 ? (
+        <section className="flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="rounded-2xl border border-surface-border bg-white px-5 py-3 text-sm font-extrabold text-ink-muted transition hover:bg-primary-tint hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Prev
+          </button>
+
+          {pageNumbers.map((pageNumber) => (
+            <button
+              key={pageNumber}
+              type="button"
+              onClick={() => handlePageChange(pageNumber)}
+              className={[
+                "flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-extrabold transition",
+                currentPage === pageNumber
+                  ? "bg-primary text-white shadow-soft"
+                  : "border border-surface-border bg-white text-ink-muted hover:bg-primary-tint hover:text-primary",
+              ].join(" ")}
+            >
+              {pageNumber}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="rounded-2xl border border-surface-border bg-white px-5 py-3 text-sm font-extrabold text-ink-muted transition hover:bg-primary-tint hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+          </button>
+        </section>
+      ) : null}
+    </section>
   );
 };
 
-const SummaryCard = ({ label, value, icon, status }) => {
+const ActionButton = ({ icon, label, tone = "default", onClick }) => {
+  const toneClass = {
+    default:
+      "border-surface-border bg-white text-ink hover:bg-primary-tint hover:text-primary",
+    danger: "border-red-100 bg-red-600 text-white hover:bg-red-700",
+  };
+
   return (
-    <div className="sc-card p-5">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-extrabold text-ink-muted">{label}</p>
-          <h3 className="mt-2 text-3xl font-extrabold tracking-tight text-ink">
-            {value}
-          </h3>
-        </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-xs font-extrabold transition",
+        toneClass[tone],
+      ].join(" ")}
+    >
+      <span className="material-symbols-rounded text-lg">{icon}</span>
+      {label}
+    </button>
+  );
+};
 
-        <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-primary-tint text-primary">
-          <span className="material-symbols-rounded text-3xl">{icon}</span>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <StatusBadge status={status} />
-      </div>
-    </div>
+const StatusSelect = ({ currentStatus, onChange }) => {
+  return (
+    <select
+      value={currentStatus}
+      onChange={(event) => onChange(event.target.value)}
+      className="rounded-2xl border border-surface-border bg-white px-4 py-2 text-xs font-extrabold text-ink-muted outline-none transition focus:border-primary"
+    >
+      {DONATION_STATUS_OPTIONS.map((status) => (
+        <option key={status.value} value={status.value}>
+          {status.label}
+        </option>
+      ))}
+    </select>
   );
 };
 
