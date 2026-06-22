@@ -1,12 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
-import BloodBadge from "../../components/common/BloodBadge";
 import Button from "../../components/common/Button";
 import SectionTitle from "../../components/common/SectionTitle";
 import StatusBadge from "../../components/common/StatusBadge";
-import { recentDonationRequests } from "../../data/dashboardMockData";
-import { formatDate } from "../../utils/dateFormatter";
 
 const faqItems = [
   {
@@ -66,7 +63,7 @@ const Home = () => {
         <div className="absolute left-0 top-0 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-teal/10 blur-3xl" />
 
-        <div className="sc-container relative grid items-center gap-10 lg:grid-cols-[1.05fr_.95fr]">
+        <div className="sc-container relative grid items-center gap-10 lg:grid-cols-[1.02fr_.98fr]">
           <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-primary/10 bg-white px-4 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-primary shadow-sm">
               <span className="material-symbols-rounded text-base">
@@ -105,64 +102,16 @@ const Home = () => {
             </div>
           </div>
 
-          <div className="sc-card relative overflow-hidden p-5 sm:p-6">
-            <div className="rounded-[30px] bg-ink p-5 text-white sm:p-6">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-white/50">
-                    Live Request Board
-                  </p>
+          <div className="relative">
+            <div className="absolute -left-8 top-8 h-24 w-24 rounded-full bg-primary/10 blur-3xl" />
+            <div className="absolute -bottom-8 right-8 h-28 w-28 rounded-full bg-red-500/10 blur-3xl" />
 
-                  <h2 className="mt-2 text-2xl font-extrabold tracking-tight">
-                    Pending Blood Needs
-                  </h2>
-                </div>
-
-                <span className="flex h-14 w-14 items-center justify-center rounded-[22px] bg-primary text-white">
-                  <span className="material-symbols-rounded text-4xl">
-                    bloodtype
-                  </span>
-                </span>
-              </div>
-
-              <div className="mt-6 space-y-4">
-                {recentDonationRequests.slice(0, 3).map((request) => (
-                  <div
-                    key={request.id}
-                    className="rounded-[24px] border border-white/10 bg-white/10 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="font-extrabold">
-                          {request.recipientName}
-                        </p>
-
-                        <p className="mt-1 text-sm font-semibold text-white/60">
-                          {request.hospitalName}
-                        </p>
-                      </div>
-
-                      <BloodBadge group={request.bloodGroup} size="sm" />
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-bold text-white/60">
-                      <span className="inline-flex items-center gap-1">
-                        <span className="material-symbols-rounded text-base">
-                          location_on
-                        </span>
-                        {request.district}, {request.upazila}
-                      </span>
-
-                      <span className="inline-flex items-center gap-1">
-                        <span className="material-symbols-rounded text-base">
-                          event
-                        </span>
-                        {formatDate(request.donationDate)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="relative rounded-[36px] border border-surface-border bg-white p-3 shadow-card sm:p-4">
+              <img
+                src="/images/hero-blood-donation.png"
+                alt="Blood donation support dashboard"
+                className="aspect-square w-full rounded-[30px] object-cover"
+              />
             </div>
           </div>
         </div>

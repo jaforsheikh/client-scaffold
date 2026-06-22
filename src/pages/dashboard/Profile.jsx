@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import toast from "react-hot-toast";
 import uploadImage from "../../api/uploadImage";
-import axiosPublic from "../../api/axiosPublic";
 import useAuth from "../../hooks/useAuth";
 import useLocationData from "../../hooks/useLocationData";
 import { BLOOD_GROUPS, DEFAULT_AVATAR } from "../../utils/constants";
@@ -29,7 +28,6 @@ const Profile = () => {
     defaultValues: {
       name: "",
       email: "",
-      avatar: "",
       bloodGroup: "",
       district: "",
       upazila: "",
@@ -53,14 +51,16 @@ const Profile = () => {
     return getUpazilasByDistrict(selectedDistrict.id);
   }, [selectedDistrict, getUpazilasByDistrict]);
 
-  useEffect(() => {
-    const avatar =
-      profileUser.avatar || profileUser.photoURL || profileUser.image || "";
+  const currentAvatar =
+    profileUser.avatar ||
+    profileUser.photoURL ||
+    profileUser.image ||
+    DEFAULT_AVATAR;
 
+  useEffect(() => {
     reset({
       name: profileUser.name || profileUser.displayName || "",
       email: profileUser.email || "",
-      avatar,
       bloodGroup: profileUser.bloodGroup || "",
       district: profileUser.district || "",
       upazila: profileUser.upazila || "",
@@ -68,8 +68,19 @@ const Profile = () => {
       status: profileUser.status || "active",
     });
 
-    setPreviewUrl(avatar || DEFAULT_AVATAR);
-  }, [profileUser, reset]);
+    setPreviewUrl(currentAvatar);
+  }, [
+    profileUser.name,
+    profileUser.displayName,
+    profileUser.email,
+    profileUser.bloodGroup,
+    profileUser.district,
+    profileUser.upazila,
+    profileUser.role,
+    profileUser.status,
+    currentAvatar,
+    reset,
+  ]);
 
   const handleDistrictChange = () => {
     resetField("upazila");
@@ -78,19 +89,19 @@ const Profile = () => {
   const handleAvatarPreview = (event) => {
     const file = event.target.files?.[0];
 
-    if (!file) return;
+    if (!file) {
+      setPreviewUrl(currentAvatar);
+      return;
+    }
 
-    setPreviewUrl(URL.createObjectURL(file));
+    const temporaryUrl = URL.createObjectURL(file);
+    setPreviewUrl(temporaryUrl);
   };
 
   const handleCancelEdit = () => {
-    const avatar =
-      profileUser.avatar || profileUser.photoURL || profileUser.image || "";
-
     reset({
       name: profileUser.name || profileUser.displayName || "",
       email: profileUser.email || "",
-      avatar,
       bloodGroup: profileUser.bloodGroup || "",
       district: profileUser.district || "",
       upazila: profileUser.upazila || "",
@@ -98,7 +109,7 @@ const Profile = () => {
       status: profileUser.status || "active",
     });
 
-    setPreviewUrl(avatar || DEFAULT_AVATAR);
+    setPreviewUrl(currentAvatar);
     setIsEditing(false);
   };
 
@@ -106,12 +117,7 @@ const Profile = () => {
     setIsSaving(true);
 
     try {
-      let avatarUrl =
-        profileUser.avatar ||
-        profileUser.photoURL ||
-        profileUser.image ||
-        DEFAULT_AVATAR;
-
+      let avatarUrl = currentAvatar;
       const selectedAvatarFile = formData.avatarFile?.[0];
 
       if (selectedAvatarFile) {
@@ -130,32 +136,19 @@ const Profile = () => {
 
       await updateUserProfile(updatedProfile);
 
-      await axiosPublic.patch("/api/users/me", updatedProfile);
-
       if (refreshSession) {
         await refreshSession();
       }
 
-      toast.success("Profile updated successfully.");
-      setIsEditing(false);
       setPreviewUrl(avatarUrl);
+      setIsEditing(false);
+      toast.success("Profile updated successfully.");
     } catch (error) {
-      toast.error(
-        error?.response?.data?.message ||
-          error.message ||
-          "Failed to update profile."
-      );
+      toast.error(error.message || "Failed to update profile.");
     } finally {
       setIsSaving(false);
     }
   };
-
-  const avatarSrc =
-    previewUrl ||
-    profileUser.avatar ||
-    profileUser.photoURL ||
-    profileUser.image ||
-    DEFAULT_AVATAR;
 
   return (
     <section className="space-y-8">
@@ -207,7 +200,7 @@ const Profile = () => {
       <div className="sc-card p-6 text-center sm:p-8">
         <div className="mx-auto h-28 w-28 overflow-hidden rounded-[34px] bg-primary-tint">
           <img
-            src={avatarSrc}
+            src={previewUrl || currentAvatar}
             alt={profileUser.name || "User avatar"}
             className="h-full w-full object-cover"
           />
@@ -290,7 +283,7 @@ const Profile = () => {
             <div className="mt-2 flex flex-col gap-4 rounded-[24px] border border-surface-border bg-white p-4 sm:flex-row sm:items-center">
               <div className="h-20 w-20 shrink-0 overflow-hidden rounded-[24px] bg-primary-tint">
                 <img
-                  src={avatarSrc}
+                  src={previewUrl || currentAvatar}
                   alt="Avatar preview"
                   className="h-full w-full object-cover"
                 />
@@ -382,6 +375,7 @@ const Profile = () => {
               <option value="">
                 {selectedDistrictName ? "Select upazila" : "Select district first"}
               </option>
+
               {upazilaOptions.map((upazila) => (
                 <option key={upazila.id} value={upazila.name}>
                   {upazila.name}
