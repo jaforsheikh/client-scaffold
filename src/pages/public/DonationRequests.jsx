@@ -1,38 +1,59 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import axiosPublic from "../../api/axiosPublic";
 import BloodBadge from "../../components/common/BloodBadge";
+import Loader from "../../components/common/Loader";
 import StatusBadge from "../../components/common/StatusBadge";
-import { donationRequestMockData } from "../../data/donationRequestMockData";
-import { DONATION_STATUS } from "../../utils/constants";
 import { formatDate } from "../../utils/dateFormatter";
 
 const REQUESTS_PER_PAGE = 6;
 
 const DonationRequests = () => {
+  const [requests, setRequests] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalRequests, setTotalRequests] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const pendingRequests = useMemo(
-    () =>
-      donationRequestMockData.filter(
-        (request) => request.status === DONATION_STATUS.PENDING
-      ),
-    []
-  );
+  const loadDonationRequests = async (page = 1) => {
+    setLoading(true);
 
-  const totalRequests = pendingRequests.length;
-  const totalPages = Math.ceil(totalRequests / REQUESTS_PER_PAGE);
+    try {
+      const { data } = await axiosPublic.get("/api/donation-requests/public", {
+        params: {
+          page,
+          limit: REQUESTS_PER_PAGE,
+        },
+      });
 
-  const startIndex = (currentPage - 1) * REQUESTS_PER_PAGE;
-  const endIndex = startIndex + REQUESTS_PER_PAGE;
+      setRequests(data?.requests || []);
+      setTotalRequests(data?.total || 0);
+      setTotalPages(data?.totalPages || 0);
+      setCurrentPage(data?.page || page);
+    } catch {
+      setRequests([]);
+      setTotalRequests(0);
+      setTotalPages(0);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const currentRequests = pendingRequests.slice(startIndex, endIndex);
-
-  const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1);
+  useEffect(() => {
+    loadDonationRequests(currentPage);
+  }, [currentPage]);
 
   const handlePageChange = (pageNumber) => {
+    if (pageNumber < 1 || pageNumber > totalPages) return;
+
     setCurrentPage(pageNumber);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const pageNumbers = Array.from(
+    { length: totalPages },
+    (_, index) => index + 1
+  );
 
   return (
     <div className="bg-surface-page py-10 sm:py-14">
@@ -80,8 +101,8 @@ const DonationRequests = () => {
               </h2>
 
               <p className="mt-1 text-sm font-semibold text-ink-muted">
-                Showing {currentRequests.length} of {totalRequests} pending
-                donation requests.
+                Showing {requests.length} of {totalRequests} pending donation
+                requests.
               </p>
             </div>
 
@@ -91,11 +112,34 @@ const DonationRequests = () => {
           </div>
         </section>
 
-        <section className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {currentRequests.map((request) => (
-            <RequestCard key={request.id} request={request} />
-          ))}
-        </section>
+        {loading ? (
+          <div className="py-20">
+            <Loader />
+          </div>
+        ) : requests.length > 0 ? (
+          <section className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {requests.map((request) => (
+              <RequestCard key={request._id || request.id} request={request} />
+            ))}
+          </section>
+        ) : (
+          <section className="mt-8 rounded-[30px] border border-dashed border-surface-border bg-white p-10 text-center">
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+              <span className="material-symbols-rounded text-4xl">
+                inventory_2
+              </span>
+            </span>
+
+            <h2 className="mt-5 text-2xl font-extrabold tracking-tight text-ink">
+              No pending donation request found
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-xl text-sm font-semibold leading-6 text-ink-muted">
+              When active users create pending donation requests, they will
+              appear here automatically.
+            </p>
+          </section>
+        )}
 
         {totalPages > 1 ? (
           <section className="mt-10 flex flex-wrap items-center justify-center gap-3">
@@ -148,13 +192,15 @@ const DonationRequests = () => {
 };
 
 const RequestCard = ({ request }) => {
+  const requestId = request.id || request._id;
+
   return (
     <article className="sc-card overflow-hidden">
       <div className="p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-primary">
-              Request ID : {request.id}
+              Request ID : {requestId}
             </p>
 
             <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-ink">
@@ -175,7 +221,9 @@ const RequestCard = ({ request }) => {
           <RequestInfo
             icon="location_on"
             label="Location"
-            value={`${request.district}, ${request.upazila}`}
+            value={`${request.district || request.recipientDistrict}, ${
+              request.upazila || request.recipientUpazila
+            }`}
           />
 
           <RequestInfo
@@ -202,7 +250,7 @@ const RequestCard = ({ request }) => {
         </div>
 
         <Link
-          to={`/donation-requests/${request.id}`}
+          to={`/donation-requests/${requestId}`}
           className="mt-5 flex w-full items-center justify-center gap-2 rounded-[18px] bg-primary px-5 py-3 text-sm font-extrabold text-white shadow-soft transition hover:-translate-y-0.5 hover:bg-primary-dark"
         >
           <span className="material-symbols-rounded text-xl">visibility</span>
