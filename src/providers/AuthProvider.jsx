@@ -12,7 +12,18 @@ const formatUser = (sessionUser) => {
     uid: sessionUser.id,
     displayName: sessionUser.name || "",
     photoURL: sessionUser.avatar || sessionUser.image || "",
+    avatar: sessionUser.avatar || sessionUser.image || "",
+    role: sessionUser.role || "donor",
+    status: sessionUser.status || "active",
   };
+};
+
+const getUserFromAuthData = (data) => {
+  return data?.user || data?.session?.user || data?.data?.user || null;
+};
+
+const getSessionFromAuthData = (data) => {
+  return data?.session || data || null;
 };
 
 const AuthProvider = ({ children }) => {
@@ -21,36 +32,43 @@ const AuthProvider = ({ children }) => {
   const [dbUser, setDbUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const setAuthState = useCallback((authData) => {
+    const sessionUser = getUserFromAuthData(authData);
+    const formattedUser = formatUser(sessionUser);
+
+    setSession(getSessionFromAuthData(authData));
+    setUser(formattedUser);
+    setDbUser(formattedUser);
+
+    return formattedUser;
+  }, []);
+
+  const clearAuthState = useCallback(() => {
+    setSession(null);
+    setUser(null);
+    setDbUser(null);
+  }, []);
+
   const refreshSession = useCallback(async () => {
     setLoading(true);
 
     try {
       const { data, error } = await authClient.getSession();
 
-      if (error) {
-        setSession(null);
-        setUser(null);
-        setDbUser(null);
+      if (error || !data?.user) {
+        clearAuthState();
         return null;
       }
 
-      const sessionUser = data?.user || null;
-      const formattedUser = formatUser(sessionUser);
-
-      setSession(data || null);
-      setUser(formattedUser);
-      setDbUser(formattedUser);
-
-      return data || null;
+      setAuthState(data);
+      return data;
     } catch {
-      setSession(null);
-      setUser(null);
-      setDbUser(null);
+      clearAuthState();
       return null;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [clearAuthState, setAuthState]);
 
   useEffect(() => {
     refreshSession();
@@ -75,7 +93,8 @@ const AuthProvider = ({ children }) => {
         throw new Error(error.message || "Registration failed.");
       }
 
-      await refreshSession();
+      setAuthState(data);
+
       return data;
     } finally {
       setLoading(false);
@@ -95,7 +114,8 @@ const AuthProvider = ({ children }) => {
         throw new Error(error.message || "Login failed.");
       }
 
-      await refreshSession();
+      setAuthState(data);
+
       return data;
     } finally {
       setLoading(false);
@@ -107,11 +127,7 @@ const AuthProvider = ({ children }) => {
 
     try {
       await authClient.signOut();
-
-      setSession(null);
-      setUser(null);
-      setDbUser(null);
-
+      clearAuthState();
       toast.success("Logged out successfully.");
     } finally {
       setLoading(false);
@@ -119,21 +135,28 @@ const AuthProvider = ({ children }) => {
   };
 
   const updateUserProfile = async (profile) => {
-    const { data, error } = await authClient.updateUser({
-      name: profile.name || profile.displayName || user?.name || "",
-      image: profile.avatar || profile.photoURL || user?.photoURL || "",
-      avatar: profile.avatar || profile.photoURL || user?.photoURL || "",
-      bloodGroup: profile.bloodGroup || dbUser?.bloodGroup || "",
-      district: profile.district || dbUser?.district || "",
-      upazila: profile.upazila || dbUser?.upazila || "",
-    });
+    setLoading(true);
 
-    if (error) {
-      throw new Error(error.message || "Profile update failed.");
+    try {
+      const { data, error } = await authClient.updateUser({
+        name: profile.name || profile.displayName || user?.name || "",
+        image: profile.avatar || profile.photoURL || user?.photoURL || "",
+        avatar: profile.avatar || profile.photoURL || user?.photoURL || "",
+        bloodGroup: profile.bloodGroup || dbUser?.bloodGroup || "",
+        district: profile.district || dbUser?.district || "",
+        upazila: profile.upazila || dbUser?.upazila || "",
+      });
+
+      if (error) {
+        throw new Error(error.message || "Profile update failed.");
+      }
+
+      await refreshSession();
+
+      return data;
+    } finally {
+      setLoading(false);
     }
-
-    await refreshSession();
-    return data;
   };
 
   const fetchDbUser = async () => {
