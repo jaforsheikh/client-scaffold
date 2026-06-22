@@ -1,352 +1,335 @@
-import { useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useMemo, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import Button from "../../components/common/Button";
-import FormError from "../../components/common/FormError";
-import PageHeader from "../../components/common/PageHeader";
+import axiosPublic from "../../api/axiosPublic";
 import useAuth from "../../hooks/useAuth";
 import useLocationData from "../../hooks/useLocationData";
 import { BLOOD_GROUPS } from "../../utils/constants";
-import { getTodayDate } from "../../utils/dateFormatter";
 
 const CreateDonationRequest = () => {
-  const { user, dbUser } = useAuth();
-  const { districts, loading, getUpazilasByDistrict } = useLocationData();
+  const { user, dbUser, isBlocked } = useAuth();
+  const { districts, getUpazilasByDistrict, loading: locationLoading } =
+    useLocationData();
+
+  const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
+    control,
     handleSubmit,
-    watch,
     reset,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    defaultValues: {
-      requesterName: "",
-      requesterEmail: "",
-      recipientName: "",
-      recipientDistrictId: "",
-      recipientUpazilaId: "",
-      hospitalName: "",
-      fullAddress: "",
-      bloodGroup: "",
-      donationDate: "",
-      donationTime: "",
-      requestMessage: "",
-    },
+    resetField,
+    formState: { errors },
+  } = useForm();
+
+  const selectedDistrictName = useWatch({
+    control,
+    name: "recipientDistrict",
   });
 
-  useEffect(() => {
-    reset({
-      requesterName: dbUser?.name || user?.displayName || "",
-      requesterEmail: dbUser?.email || user?.email || "",
-      recipientName: "",
-      recipientDistrictId: "",
-      recipientUpazilaId: "",
-      hospitalName: "",
-      fullAddress: "",
-      bloodGroup: "",
-      donationDate: "",
-      donationTime: "",
-      requestMessage: "",
-    });
-  }, [dbUser, user, reset]);
-
-  const selectedDistrictId = watch("recipientDistrictId");
-
-  const filteredUpazilas = useMemo(
-    () => getUpazilasByDistrict(selectedDistrictId),
-    [getUpazilasByDistrict, selectedDistrictId]
+  const selectedDistrict = useMemo(
+    () => districts.find((district) => district.name === selectedDistrictName),
+    [districts, selectedDistrictName]
   );
 
-  const onSubmit = async (data) => {
-    const selectedDistrict = districts.find(
-      (district) => String(district.id) === String(data.recipientDistrictId)
-    );
+  const upazilaOptions = useMemo(() => {
+    if (!selectedDistrict?.id) return [];
+    return getUpazilasByDistrict(selectedDistrict.id);
+  }, [selectedDistrict, getUpazilasByDistrict]);
 
-    const selectedUpazila = filteredUpazilas.find(
-      (upazila) => String(upazila.id) === String(data.recipientUpazilaId)
-    );
+  const requesterName =
+    dbUser?.name || user?.displayName || user?.name || "Scaffold User";
+  const requesterEmail = dbUser?.email || user?.email || "";
 
-    const donationRequest = {
-      requesterName: data.requesterName,
-      requesterEmail: data.requesterEmail,
-      recipientName: data.recipientName,
-      recipientDistrict: selectedDistrict?.name || "",
-      recipientDistrictId: data.recipientDistrictId,
-      recipientUpazila: selectedUpazila?.name || "",
-      recipientUpazilaId: data.recipientUpazilaId,
-      hospitalName: data.hospitalName,
-      fullAddress: data.fullAddress,
-      bloodGroup: data.bloodGroup,
-      donationDate: data.donationDate,
-      donationTime: data.donationTime,
-      requestMessage: data.requestMessage,
-      status: "pending",
-      donationStatus: "pending",
-      donorName: "",
-      donorEmail: "",
-      createdAt: new Date().toISOString(),
-    };
+  const handleDistrictChange = () => {
+    resetField("recipientUpazila");
+  };
 
-    console.log("Donation Request:", donationRequest);
+  const handleCreateRequest = async (formData) => {
+    if (isBlocked) {
+      toast.error("Blocked users cannot create donation requests.");
+      return;
+    }
 
-    toast.success("Donation request created successfully.");
+    setIsSubmitting(true);
 
-    reset({
-      requesterName: dbUser?.name || user?.displayName || "",
-      requesterEmail: dbUser?.email || user?.email || "",
-      recipientName: "",
-      recipientDistrictId: "",
-      recipientUpazilaId: "",
-      hospitalName: "",
-      fullAddress: "",
-      bloodGroup: "",
-      donationDate: "",
-      donationTime: "",
-      requestMessage: "",
-    });
+    try {
+      await axiosPublic.post("/api/donation-requests", {
+        recipientName: formData.recipientName,
+        recipientDistrict: formData.recipientDistrict,
+        recipientUpazila: formData.recipientUpazila,
+        hospitalName: formData.hospitalName,
+        fullAddress: formData.fullAddress,
+        bloodGroup: formData.bloodGroup,
+        donationDate: formData.donationDate,
+        donationTime: formData.donationTime,
+        requestMessage: formData.requestMessage,
+      });
+
+      toast.success("Donation request created successfully.");
+      reset();
+      navigate("/dashboard/my-donation-requests");
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.message ||
+          error.message ||
+          "Failed to create donation request."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Create Request"
-        title="Create a blood donation request"
-        description="Submit accurate recipient, hospital, blood group, date and location information so donors can respond faster."
-        icon="add_circle"
-      />
+    <section className="space-y-8">
+      <div className="sc-card p-6 sm:p-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-primary">
+              Create Donation Request
+            </p>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <section className="sc-card overflow-hidden">
-          <div className="border-b border-surface-border p-5 sm:p-6">
-            <h2 className="text-xl font-extrabold tracking-tight text-ink">
-              Requester Information
-            </h2>
-            <p className="mt-1 text-sm font-semibold text-ink-muted">
-              Requester name and email are locked from your logged-in account.
+            <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+              Request blood donation support
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-ink-muted">
+              Create a pending blood donation request with recipient, hospital,
+              location, date and message details.
             </p>
           </div>
 
-          <div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
-            <div>
-              <label className="sc-label">Requester Name</label>
-              <input
-                type="text"
-                className="sc-input mt-2 bg-surface-soft"
-                readOnly
-                placeholder="Logged in user name"
-                {...register("requesterName", {
-                  required: "Requester name is required.",
-                })}
-              />
-              <FormError message={errors.requesterName?.message} />
-            </div>
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+            <span className="material-symbols-rounded text-4xl">
+              assignment_add
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {isBlocked ? (
+        <div className="sc-card border-red-100 bg-red-50 p-6">
+          <div className="flex items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-white text-state-danger">
+              <span className="material-symbols-rounded">block</span>
+            </span>
 
             <div>
-              <label className="sc-label">Requester Email</label>
-              <input
-                type="email"
-                className="sc-input mt-2 bg-surface-soft"
-                readOnly
-                placeholder="Logged in user email"
-                {...register("requesterEmail", {
-                  required: "Requester email is required.",
-                })}
-              />
-              <FormError message={errors.requesterEmail?.message} />
+              <h2 className="text-xl font-extrabold tracking-tight text-ink">
+                Account Blocked
+              </h2>
+
+              <p className="mt-2 text-sm font-semibold leading-6 text-ink-muted">
+                Your account is currently blocked. You cannot create donation
+                requests until an admin changes your status to active.
+              </p>
             </div>
           </div>
-        </section>
+        </div>
+      ) : null}
 
-        <section className="sc-card overflow-hidden">
-          <div className="border-b border-surface-border p-5 sm:p-6">
-            <h2 className="text-xl font-extrabold tracking-tight text-ink">
-              Recipient & Hospital Details
-            </h2>
-            <p className="mt-1 text-sm font-semibold text-ink-muted">
-              Add clear patient and hospital information for the donor.
-            </p>
+      <form
+        onSubmit={handleSubmit(handleCreateRequest)}
+        className="sc-card p-6 sm:p-8"
+      >
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <label className="sc-label">Requester Name</label>
+            <input
+              type="text"
+              value={requesterName}
+              readOnly
+              className="sc-input mt-2 bg-surface-soft"
+            />
           </div>
 
-          <div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
-            <div>
-              <label className="sc-label">Recipient Name</label>
-              <input
-                type="text"
-                className="sc-input mt-2"
-                placeholder="Recipient full name"
-                {...register("recipientName", {
-                  required: "Recipient name is required.",
-                })}
-              />
-              <FormError message={errors.recipientName?.message} />
-            </div>
+          <div>
+            <label className="sc-label">Requester Email</label>
+            <input
+              type="email"
+              value={requesterEmail}
+              readOnly
+              className="sc-input mt-2 bg-surface-soft"
+            />
+          </div>
 
-            <div>
-              <label className="sc-label">Blood Group</label>
-              <select
-                className="sc-select mt-2"
-                {...register("bloodGroup", {
-                  required: "Blood group is required.",
-                })}
-              >
-                <option value="">Select blood group</option>
-                {BLOOD_GROUPS.map((group) => (
-                  <option key={group} value={group}>
-                    {group}
-                  </option>
-                ))}
-              </select>
-              <FormError message={errors.bloodGroup?.message} />
-            </div>
+          <div>
+            <label className="sc-label">Recipient Name</label>
+            <input
+              type="text"
+              className="sc-input mt-2"
+              placeholder="Enter recipient name"
+              {...register("recipientName", {
+                required: "Recipient name is required.",
+              })}
+            />
+            {errors.recipientName ? (
+              <FormError message={errors.recipientName.message} />
+            ) : null}
+          </div>
 
-            <div>
-              <label className="sc-label">Recipient District</label>
-              <select
-                className="sc-select mt-2"
-                disabled={loading}
-                {...register("recipientDistrictId", {
-                  required: "District is required.",
-                })}
-              >
-                <option value="">
-                  {loading ? "Loading districts..." : "Select district"}
+          <div>
+            <label className="sc-label">Blood Group</label>
+            <select
+              className="sc-select mt-2"
+              {...register("bloodGroup", {
+                required: "Blood group is required.",
+              })}
+            >
+              <option value="">Select blood group</option>
+              {BLOOD_GROUPS.map((group) => (
+                <option key={group} value={group}>
+                  {group}
                 </option>
-
-                {districts.map((district) => (
-                  <option key={district.id} value={district.id}>
-                    {district.name}
-                  </option>
-                ))}
-              </select>
-              <FormError message={errors.recipientDistrictId?.message} />
-            </div>
-
-            <div>
-              <label className="sc-label">Recipient Upazila</label>
-              <select
-                className="sc-select mt-2"
-                disabled={!selectedDistrictId || loading}
-                {...register("recipientUpazilaId", {
-                  required: "Upazila is required.",
-                })}
-              >
-                <option value="">
-                  {!selectedDistrictId
-                    ? "Select district first"
-                    : "Select upazila"}
-                </option>
-
-                {filteredUpazilas.map((upazila) => (
-                  <option key={upazila.id} value={upazila.id}>
-                    {upazila.name}
-                  </option>
-                ))}
-              </select>
-              <FormError message={errors.recipientUpazilaId?.message} />
-            </div>
-
-            <div>
-              <label className="sc-label">Hospital Name</label>
-              <input
-                type="text"
-                className="sc-input mt-2"
-                placeholder="Hospital or clinic name"
-                {...register("hospitalName", {
-                  required: "Hospital name is required.",
-                })}
-              />
-              <FormError message={errors.hospitalName?.message} />
-            </div>
-
-            <div>
-              <label className="sc-label">Full Address Line</label>
-              <input
-                type="text"
-                className="sc-input mt-2"
-                placeholder="Example: Zahir Raihan Rd, Dhaka"
-                {...register("fullAddress", {
-                  required: "Full address is required.",
-                })}
-              />
-              <FormError message={errors.fullAddress?.message} />
-            </div>
-
-            <div>
-              <label className="sc-label">Donation Date</label>
-              <input
-                type="date"
-                min={getTodayDate()}
-                className="sc-input mt-2"
-                {...register("donationDate", {
-                  required: "Donation date is required.",
-                })}
-              />
-              <FormError message={errors.donationDate?.message} />
-            </div>
-
-            <div>
-              <label className="sc-label">Donation Time</label>
-              <input
-                type="time"
-                className="sc-input mt-2"
-                {...register("donationTime", {
-                  required: "Donation time is required.",
-                })}
-              />
-              <FormError message={errors.donationTime?.message} />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="sc-label">Request Message</label>
-              <textarea
-                rows="5"
-                className="sc-textarea mt-2"
-                placeholder="Write why blood is needed in detail."
-                {...register("requestMessage", {
-                  required: "Request message is required.",
-                  minLength: {
-                    value: 20,
-                    message: "Message must be at least 20 characters.",
-                  },
-                })}
-              />
-              <FormError message={errors.requestMessage?.message} />
-            </div>
+              ))}
+            </select>
+            {errors.bloodGroup ? (
+              <FormError message={errors.bloodGroup.message} />
+            ) : null}
           </div>
-        </section>
 
-        <div className="flex flex-col justify-end gap-3 sm:flex-row">
-          <Button
-            type="button"
-            variant="secondary"
-            icon="restart_alt"
-            onClick={() =>
-              reset({
-                requesterName: dbUser?.name || user?.displayName || "",
-                requesterEmail: dbUser?.email || user?.email || "",
-                recipientName: "",
-                recipientDistrictId: "",
-                recipientUpazilaId: "",
-                hospitalName: "",
-                fullAddress: "",
-                bloodGroup: "",
-                donationDate: "",
-                donationTime: "",
-                requestMessage: "",
-              })
-            }
+          <div>
+            <label className="sc-label">Recipient District</label>
+            <select
+              className="sc-select mt-2"
+              disabled={locationLoading}
+              {...register("recipientDistrict", {
+                required: "Recipient district is required.",
+                onChange: handleDistrictChange,
+              })}
+            >
+              <option value="">
+                {locationLoading ? "Loading districts..." : "Select district"}
+              </option>
+              {districts.map((district) => (
+                <option key={district.id} value={district.name}>
+                  {district.name}
+                </option>
+              ))}
+            </select>
+            {errors.recipientDistrict ? (
+              <FormError message={errors.recipientDistrict.message} />
+            ) : null}
+          </div>
+
+          <div>
+            <label className="sc-label">Recipient Upazila</label>
+            <select
+              className="sc-select mt-2"
+              disabled={!selectedDistrictName || locationLoading}
+              {...register("recipientUpazila", {
+                required: "Recipient upazila is required.",
+              })}
+            >
+              <option value="">
+                {selectedDistrictName
+                  ? "Select upazila"
+                  : "Select district first"}
+              </option>
+              {upazilaOptions.map((upazila) => (
+                <option key={upazila.id} value={upazila.name}>
+                  {upazila.name}
+                </option>
+              ))}
+            </select>
+            {errors.recipientUpazila ? (
+              <FormError message={errors.recipientUpazila.message} />
+            ) : null}
+          </div>
+
+          <div>
+            <label className="sc-label">Hospital Name</label>
+            <input
+              type="text"
+              className="sc-input mt-2"
+              placeholder="Dhaka Medical College Hospital"
+              {...register("hospitalName", {
+                required: "Hospital name is required.",
+              })}
+            />
+            {errors.hospitalName ? (
+              <FormError message={errors.hospitalName.message} />
+            ) : null}
+          </div>
+
+          <div>
+            <label className="sc-label">Full Address</label>
+            <input
+              type="text"
+              className="sc-input mt-2"
+              placeholder="Zahir Raihan Rd, Dhaka"
+              {...register("fullAddress", {
+                required: "Full address is required.",
+              })}
+            />
+            {errors.fullAddress ? (
+              <FormError message={errors.fullAddress.message} />
+            ) : null}
+          </div>
+
+          <div>
+            <label className="sc-label">Donation Date</label>
+            <input
+              type="date"
+              className="sc-input mt-2"
+              {...register("donationDate", {
+                required: "Donation date is required.",
+              })}
+            />
+            {errors.donationDate ? (
+              <FormError message={errors.donationDate.message} />
+            ) : null}
+          </div>
+
+          <div>
+            <label className="sc-label">Donation Time</label>
+            <input
+              type="time"
+              className="sc-input mt-2"
+              {...register("donationTime", {
+                required: "Donation time is required.",
+              })}
+            />
+            {errors.donationTime ? (
+              <FormError message={errors.donationTime.message} />
+            ) : null}
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="sc-label">Request Message</label>
+            <textarea
+              rows="5"
+              className="sc-textarea mt-2"
+              placeholder="Write why blood is needed in detail"
+              {...register("requestMessage", {
+                required: "Request message is required.",
+              })}
+            />
+            {errors.requestMessage ? (
+              <FormError message={errors.requestMessage.message} />
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-8 flex justify-end">
+          <button
+            type="submit"
+            disabled={isSubmitting || isBlocked}
+            className="sc-primary-btn px-8 py-3 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Reset Form
-          </Button>
-
-          <Button type="submit" icon="send" loading={isSubmitting}>
-            Request
-          </Button>
+            <span className="material-symbols-rounded">assignment_add</span>
+            {isSubmitting ? "Creating Request..." : "Request"}
+          </button>
         </div>
       </form>
-    </div>
+    </section>
   );
+};
+
+const FormError = ({ message }) => {
+  return <p className="mt-2 text-xs font-bold text-state-danger">{message}</p>;
 };
 
 export default CreateDonationRequest;
