@@ -5,6 +5,8 @@ import Button from "../../components/common/Button";
 import SectionTitle from "../../components/common/SectionTitle";
 import StatusBadge from "../../components/common/StatusBadge";
 
+const HERO_IMAGE = "/images/hero-blood-donation.png";
+
 const faqItems = [
   {
     question: "Who can register as a blood donor?",
@@ -103,14 +105,15 @@ const Home = () => {
           </div>
 
           <div className="relative">
-            <div className="absolute -left-8 top-8 h-24 w-24 rounded-full bg-primary/10 blur-3xl" />
-            <div className="absolute -bottom-8 right-8 h-28 w-28 rounded-full bg-red-500/10 blur-3xl" />
+            <div className="absolute -left-8 top-8 h-28 w-28 rounded-full bg-primary/10 blur-3xl" />
+            <div className="absolute -bottom-8 right-8 h-32 w-32 rounded-full bg-red-500/10 blur-3xl" />
 
-            <div className="relative rounded-[36px] border border-surface-border bg-white p-3 shadow-card sm:p-4">
+            <div className="relative overflow-hidden rounded-[36px] border border-surface-border bg-white p-3 shadow-card sm:p-4">
               <img
-                src="/images/hero-blood-donation.png"
+                src={HERO_IMAGE}
                 alt="Blood donation support dashboard"
-                className="aspect-square w-full rounded-[30px] object-cover"
+                className="block aspect-square w-full rounded-[30px] object-cover"
+                loading="eager"
               />
             </div>
           </div>
