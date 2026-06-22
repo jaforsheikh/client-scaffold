@@ -1,20 +1,26 @@
-import { createContext, useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { authClient } from "../api/authClient";
 
 export const AuthContext = createContext(null);
 
-const formatUser = (sessionUser) => {
-  if (!sessionUser) return null;
+const formatUser = (sessionUser, fallbackEmail = "") => {
+  if (!sessionUser && !fallbackEmail) return null;
 
   return {
-    ...sessionUser,
-    uid: sessionUser.id,
-    displayName: sessionUser.name || "",
-    photoURL: sessionUser.avatar || sessionUser.image || "",
-    avatar: sessionUser.avatar || sessionUser.image || "",
-    role: sessionUser.role || "donor",
-    status: sessionUser.status || "active",
+    ...(sessionUser || {}),
+    uid: sessionUser?.id || sessionUser?._id || fallbackEmail,
+    id: sessionUser?.id || sessionUser?._id || fallbackEmail,
+    name: sessionUser?.name || "",
+    email: sessionUser?.email || fallbackEmail,
+    displayName: sessionUser?.name || "",
+    photoURL: sessionUser?.avatar || sessionUser?.image || "",
+    avatar: sessionUser?.avatar || sessionUser?.image || "",
+    bloodGroup: sessionUser?.bloodGroup || "",
+    district: sessionUser?.district || "",
+    upazila: sessionUser?.upazila || "",
+    role: sessionUser?.role || "donor",
+    status: sessionUser?.status || "active",
   };
 };
 
@@ -22,60 +28,39 @@ const getUserFromAuthData = (data) => {
   return data?.user || data?.session?.user || data?.data?.user || null;
 };
 
-const getSessionFromAuthData = (data) => {
-  return data?.session || data || null;
-};
-
 const AuthProvider = ({ children }) => {
-  const [session, setSession] = useState(null);
-  const [user, setUser] = useState(null);
-  const [dbUser, setDbUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const {
+    data: sessionData,
+    isPending,
+    refetch,
+  } = authClient.useSession();
 
-  const setAuthState = useCallback((authData) => {
-    const sessionUser = getUserFromAuthData(authData);
-    const formattedUser = formatUser(sessionUser);
+  const [optimisticUser, setOptimisticUser] = useState(null);
+  const [manualLoading, setManualLoading] = useState(false);
 
-    setSession(getSessionFromAuthData(authData));
-    setUser(formattedUser);
-    setDbUser(formattedUser);
-
-    return formattedUser;
-  }, []);
-
-  const clearAuthState = useCallback(() => {
-    setSession(null);
-    setUser(null);
-    setDbUser(null);
-  }, []);
+  const sessionUser = sessionData?.user || null;
+  const formattedSessionUser = formatUser(sessionUser);
+  const finalUser = formattedSessionUser || optimisticUser;
 
   const refreshSession = useCallback(async () => {
-    setLoading(true);
-
     try {
-      const { data, error } = await authClient.getSession();
+      const result = await refetch?.();
+      const refreshedUser = result?.data?.user || null;
 
-      if (error || !data?.user) {
-        clearAuthState();
-        return null;
+      if (refreshedUser) {
+        const formattedUser = formatUser(refreshedUser);
+        setOptimisticUser(formattedUser);
+        return result?.data || null;
       }
 
-      setAuthState(data);
-      return data;
+      return sessionData || null;
     } catch {
-      clearAuthState();
-      return null;
-    } finally {
-      setLoading(false);
+      return sessionData || null;
     }
-  }, [clearAuthState, setAuthState]);
-
-  useEffect(() => {
-    refreshSession();
-  }, [refreshSession]);
+  }, [refetch, sessionData]);
 
   const createUser = async (email, password, extraData = {}) => {
-    setLoading(true);
+    setManualLoading(true);
 
     try {
       const { data, error } = await authClient.signUp.email({
@@ -93,16 +78,20 @@ const AuthProvider = ({ children }) => {
         throw new Error(error.message || "Registration failed.");
       }
 
-      setAuthState(data);
+      const responseUser = getUserFromAuthData(data);
+      const formattedUser = formatUser(responseUser, email);
+
+      setOptimisticUser(formattedUser);
+      await refreshSession();
 
       return data;
     } finally {
-      setLoading(false);
+      setManualLoading(false);
     }
   };
 
   const loginUser = async (email, password) => {
-    setLoading(true);
+    setManualLoading(true);
 
     try {
       const { data, error } = await authClient.signIn.email({
@@ -114,37 +103,42 @@ const AuthProvider = ({ children }) => {
         throw new Error(error.message || "Login failed.");
       }
 
-      setAuthState(data);
+      const responseUser = getUserFromAuthData(data);
+      const formattedUser = formatUser(responseUser, email);
+
+      setOptimisticUser(formattedUser);
+      await refreshSession();
 
       return data;
     } finally {
-      setLoading(false);
+      setManualLoading(false);
     }
   };
 
   const logoutUser = async () => {
-    setLoading(true);
+    setManualLoading(true);
 
     try {
       await authClient.signOut();
-      clearAuthState();
+      setOptimisticUser(null);
+      await refreshSession();
       toast.success("Logged out successfully.");
     } finally {
-      setLoading(false);
+      setManualLoading(false);
     }
   };
 
   const updateUserProfile = async (profile) => {
-    setLoading(true);
+    setManualLoading(true);
 
     try {
       const { data, error } = await authClient.updateUser({
-        name: profile.name || profile.displayName || user?.name || "",
-        image: profile.avatar || profile.photoURL || user?.photoURL || "",
-        avatar: profile.avatar || profile.photoURL || user?.photoURL || "",
-        bloodGroup: profile.bloodGroup || dbUser?.bloodGroup || "",
-        district: profile.district || dbUser?.district || "",
-        upazila: profile.upazila || dbUser?.upazila || "",
+        name: profile.name || profile.displayName || finalUser?.name || "",
+        image: profile.avatar || profile.photoURL || finalUser?.photoURL || "",
+        avatar: profile.avatar || profile.photoURL || finalUser?.photoURL || "",
+        bloodGroup: profile.bloodGroup || finalUser?.bloodGroup || "",
+        district: profile.district || finalUser?.district || "",
+        upazila: profile.upazila || finalUser?.upazila || "",
       });
 
       if (error) {
@@ -155,7 +149,7 @@ const AuthProvider = ({ children }) => {
 
       return data;
     } finally {
-      setLoading(false);
+      setManualLoading(false);
     }
   };
 
@@ -165,22 +159,22 @@ const AuthProvider = ({ children }) => {
 
   const authInfo = useMemo(
     () => ({
-      session,
-      user,
-      dbUser,
-      loading,
+      session: sessionData || null,
+      user: finalUser,
+      dbUser: finalUser,
+      loading: Boolean(isPending || manualLoading),
       createUser,
       loginUser,
       logoutUser,
       updateUserProfile,
       fetchDbUser,
       refreshSession,
-      isAdmin: dbUser?.role === "admin",
-      isVolunteer: dbUser?.role === "volunteer",
-      isDonor: !dbUser?.role || dbUser?.role === "donor",
-      isBlocked: dbUser?.status === "blocked",
+      isAdmin: finalUser?.role === "admin",
+      isVolunteer: finalUser?.role === "volunteer",
+      isDonor: !finalUser?.role || finalUser?.role === "donor",
+      isBlocked: finalUser?.status === "blocked",
     }),
-    [session, user, dbUser, loading, refreshSession]
+    [sessionData, finalUser, isPending, manualLoading, refreshSession]
   );
 
   return <AuthContext.Provider value={authInfo}>{children}</AuthContext.Provider>;
