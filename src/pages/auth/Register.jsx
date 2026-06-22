@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm, useWatch } from "react-hook-form";
 import toast from "react-hot-toast";
+import uploadImage from "../../api/uploadImage";
 import useAuth from "../../hooks/useAuth";
 import useLocationData from "../../hooks/useLocationData";
 import { BLOOD_GROUPS } from "../../utils/constants";
@@ -13,6 +14,7 @@ const Register = () => {
 
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
 
   const {
     register,
@@ -28,10 +30,7 @@ const Register = () => {
   });
 
   const selectedDistrict = useMemo(
-    () =>
-      districts.find(
-        (district) => district.name === selectedDistrictName
-      ),
+    () => districts.find((district) => district.name === selectedDistrictName),
     [districts, selectedDistrictName]
   );
 
@@ -44,18 +43,39 @@ const Register = () => {
     resetField("upazila");
   };
 
+  const handleAvatarPreview = (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      setPreviewUrl("");
+      return;
+    }
+
+    setPreviewUrl(URL.createObjectURL(file));
+  };
+
   const handleRegister = async (formData) => {
     if (formData.password !== formData.confirmPassword) {
       toast.error("Password and confirm password do not match.");
       return;
     }
 
+    const avatarFile = formData.avatar?.[0];
+
+    if (!avatarFile) {
+      toast.error("Please upload your avatar image.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
+      const avatarUrl = await uploadImage(avatarFile);
+
       await createUser(formData.email, formData.password, {
         name: formData.name,
-        avatar: formData.avatar,
+        avatar: avatarUrl,
+        photoURL: avatarUrl,
         bloodGroup: formData.bloodGroup,
         district: formData.district,
         upazila: formData.upazila,
@@ -90,7 +110,7 @@ const Register = () => {
             </h1>
 
             <p className="mt-3 max-w-xl text-base font-semibold leading-7 text-ink-muted">
-              Register as a donor with accurate blood group and location
+              Register as a donor with accurate blood group, avatar and location
               information.
             </p>
 
@@ -123,13 +143,44 @@ const Register = () => {
               </div>
 
               <div className="sm:col-span-2">
-                <label className="sc-label">Avatar / Photo URL</label>
-                <input
-                  type="url"
-                  className="sc-input mt-2"
-                  placeholder="Enter avatar URL"
-                  {...register("avatar")}
-                />
+                <label className="sc-label">Avatar Image</label>
+
+                <div className="mt-2 flex flex-col gap-4 rounded-[24px] border border-surface-border bg-white p-4 sm:flex-row sm:items-center">
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[24px] bg-primary-tint text-primary">
+                    {previewUrl ? (
+                      <img
+                        src={previewUrl}
+                        alt="Avatar preview"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="material-symbols-rounded text-4xl">
+                        image
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="w-full">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="block w-full cursor-pointer rounded-[18px] border border-surface-border bg-surface-soft px-4 py-3 text-sm font-semibold text-ink-muted file:mr-4 file:rounded-xl file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-extrabold file:text-white"
+                      {...register("avatar", {
+                        required: "Avatar image is required.",
+                        onChange: handleAvatarPreview,
+                      })}
+                    />
+
+                    <p className="mt-2 text-xs font-semibold text-ink-muted">
+                      Upload a clear profile image. It will be stored through
+                      imgBB and saved as your avatar URL.
+                    </p>
+                  </div>
+                </div>
+
+                {errors.avatar ? (
+                  <FormError message={errors.avatar.message} />
+                ) : null}
               </div>
 
               <div>
@@ -242,7 +293,7 @@ const Register = () => {
                   className="sc-primary-btn w-full justify-center px-6 py-3 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span className="material-symbols-rounded">person_add</span>
-                  {isSubmitting ? "Registering..." : "Register"}
+                  {isSubmitting ? "Uploading & Registering..." : "Register"}
                 </button>
               </div>
             </form>
@@ -265,17 +316,17 @@ const Register = () => {
             </h2>
 
             <p className="mt-5 max-w-lg text-base font-semibold leading-8 text-white/60">
-              Accurate blood group, district and upazila information improves
-              donor search and emergency request matching.
+              Accurate avatar, blood group, district and upazila information
+              improves donor search and emergency request matching.
             </p>
 
             <div className="mt-10 space-y-4">
+              <RegisterFeature icon="image" title="imgBB Avatar Upload" />
               <RegisterFeature icon="bloodtype" title="Blood Group Matching" />
               <RegisterFeature
                 icon="location_on"
                 title="District & Upazila Based Search"
               />
-              <RegisterFeature icon="verified_user" title="Default Donor Access" />
             </div>
           </div>
         </div>
