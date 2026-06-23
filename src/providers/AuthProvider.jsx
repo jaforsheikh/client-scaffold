@@ -29,6 +29,8 @@ const getUserFromAuthData = (data) => {
   return data?.user || data?.session?.user || data?.data?.user || null;
 };
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const AuthProvider = ({ children }) => {
   const { data: sessionData, isPending, refetch } = authClient.useSession();
 
@@ -38,17 +40,6 @@ const AuthProvider = ({ children }) => {
   const sessionUser = sessionData?.user || null;
   const formattedSessionUser = formatUser(sessionUser);
   const finalUser = formattedSessionUser || optimisticUser;
-
-  const issueJwtToken = async () => {
-    const { data } = await axiosPublic.post("/api/jwt");
-
-    if (!data?.token) {
-      throw new Error("JWT token was not issued.");
-    }
-
-    localStorage.setItem("scaffold-token", data.token);
-    return data.token;
-  };
 
   const refreshSession = useCallback(async () => {
     try {
@@ -66,6 +57,29 @@ const AuthProvider = ({ children }) => {
       return sessionData || null;
     }
   }, [refetch, sessionData]);
+
+  const issueJwtToken = async () => {
+    localStorage.removeItem("scaffold-token");
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        await wait(attempt * 400);
+
+        const { data } = await axiosPublic.post("/api/jwt");
+
+        if (data?.token) {
+          localStorage.setItem("scaffold-token", data.token);
+          return data.token;
+        }
+      } catch (error) {
+        if (attempt === 3) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error("JWT token was not issued.");
+  };
 
   const createUser = async (email, password, extraData = {}) => {
     setManualLoading(true);
@@ -91,6 +105,7 @@ const AuthProvider = ({ children }) => {
 
       setOptimisticUser(formattedUser);
 
+      await refreshSession();
       await issueJwtToken();
       await refreshSession();
 
@@ -118,6 +133,7 @@ const AuthProvider = ({ children }) => {
 
       setOptimisticUser(formattedUser);
 
+      await refreshSession();
       await issueJwtToken();
       await refreshSession();
 
