@@ -1,5 +1,6 @@
 import { createContext, useCallback, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import axiosPublic from "../api/axiosPublic";
 import { authClient } from "../api/authClient";
 
 export const AuthContext = createContext(null);
@@ -29,11 +30,7 @@ const getUserFromAuthData = (data) => {
 };
 
 const AuthProvider = ({ children }) => {
-  const {
-    data: sessionData,
-    isPending,
-    refetch,
-  } = authClient.useSession();
+  const { data: sessionData, isPending, refetch } = authClient.useSession();
 
   const [optimisticUser, setOptimisticUser] = useState(null);
   const [manualLoading, setManualLoading] = useState(false);
@@ -41,6 +38,17 @@ const AuthProvider = ({ children }) => {
   const sessionUser = sessionData?.user || null;
   const formattedSessionUser = formatUser(sessionUser);
   const finalUser = formattedSessionUser || optimisticUser;
+
+  const issueJwtToken = async () => {
+    const { data } = await axiosPublic.post("/api/jwt");
+
+    if (!data?.token) {
+      throw new Error("JWT token was not issued.");
+    }
+
+    localStorage.setItem("scaffold-token", data.token);
+    return data.token;
+  };
 
   const refreshSession = useCallback(async () => {
     try {
@@ -82,6 +90,8 @@ const AuthProvider = ({ children }) => {
       const formattedUser = formatUser(responseUser, email);
 
       setOptimisticUser(formattedUser);
+
+      await issueJwtToken();
       await refreshSession();
 
       return data;
@@ -107,6 +117,8 @@ const AuthProvider = ({ children }) => {
       const formattedUser = formatUser(responseUser, email);
 
       setOptimisticUser(formattedUser);
+
+      await issueJwtToken();
       await refreshSession();
 
       return data;
@@ -119,6 +131,7 @@ const AuthProvider = ({ children }) => {
     setManualLoading(true);
 
     try {
+      localStorage.removeItem("scaffold-token");
       await authClient.signOut();
       setOptimisticUser(null);
       await refreshSession();
@@ -146,16 +159,13 @@ const AuthProvider = ({ children }) => {
       }
 
       await refreshSession();
-
       return data;
     } finally {
       setManualLoading(false);
     }
   };
 
-  const fetchDbUser = async () => {
-    return refreshSession();
-  };
+  const fetchDbUser = async () => refreshSession();
 
   const authInfo = useMemo(
     () => ({

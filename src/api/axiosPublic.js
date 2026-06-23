@@ -5,4 +5,14 @@ const axiosPublic = axios.create({
   withCredentials: true,
 });
 
+axiosPublic.interceptors.request.use((config) => {
+  const token = localStorage.getItem("scaffold-token");
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
+
 export default axiosPublic;
