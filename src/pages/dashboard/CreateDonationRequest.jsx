@@ -1,28 +1,34 @@
 import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import axiosPublic from "../../api/axiosPublic";
+import Button from "../../components/common/Button";
 import useAuth from "../../hooks/useAuth";
 import useLocationData from "../../hooks/useLocationData";
 import { BLOOD_GROUPS } from "../../utils/constants";
 
 const CreateDonationRequest = () => {
+  const navigate = useNavigate();
   const { user, dbUser, isBlocked } = useAuth();
+
   const { districts, getUpazilasByDistrict, loading: locationLoading } =
     useLocationData();
 
-  const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
     control,
     handleSubmit,
-    reset,
     resetField,
     formState: { errors },
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      requesterName: dbUser?.name || user?.name || user?.displayName || "",
+      requesterEmail: dbUser?.email || user?.email || "",
+    },
+  });
 
   const selectedDistrictName = useWatch({
     control,
@@ -39,16 +45,15 @@ const CreateDonationRequest = () => {
     return getUpazilasByDistrict(selectedDistrict.id);
   }, [selectedDistrict, getUpazilasByDistrict]);
 
-  const requesterName =
-    dbUser?.name || user?.displayName || user?.name || "Scaffold User";
-  const requesterEmail = dbUser?.email || user?.email || "";
+  const blockedStatus =
+    isBlocked || dbUser?.status === "blocked" || user?.status === "blocked";
 
   const handleDistrictChange = () => {
     resetField("recipientUpazila");
   };
 
   const handleCreateRequest = async (formData) => {
-    if (isBlocked) {
+    if (blockedStatus) {
       toast.error("Blocked users cannot create donation requests.");
       return;
     }
@@ -57,6 +62,8 @@ const CreateDonationRequest = () => {
 
     try {
       await axiosPublic.post("/api/donation-requests", {
+        requesterName: formData.requesterName,
+        requesterEmail: formData.requesterEmail,
         recipientName: formData.recipientName,
         recipientDistrict: formData.recipientDistrict,
         recipientUpazila: formData.recipientUpazila,
@@ -69,7 +76,6 @@ const CreateDonationRequest = () => {
       });
 
       toast.success("Donation request created successfully.");
-      reset();
       navigate("/dashboard/my-donation-requests");
     } catch (error) {
       toast.error(
@@ -82,53 +88,57 @@ const CreateDonationRequest = () => {
     }
   };
 
+  if (blockedStatus) {
+    return (
+      <section className="sc-card p-8 text-center">
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-red-50 text-state-danger">
+          <span className="material-symbols-rounded text-4xl">block</span>
+        </span>
+
+        <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-ink">
+          Your account is blocked
+        </h1>
+
+        <p className="mx-auto mt-3 max-w-xl text-sm font-semibold leading-6 text-ink-muted">
+          Blocked users cannot create blood donation requests. Please contact
+          admin support if you think this is a mistake.
+        </p>
+
+        <div className="mt-6">
+          <Link to="/dashboard">
+            <Button icon="dashboard">Back to Dashboard</Button>
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="space-y-8">
       <div className="sc-card p-6 sm:p-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-5">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
+            <span className="material-symbols-rounded text-4xl">
+              add_circle
+            </span>
+          </span>
+
           <div>
             <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-primary">
               Create Donation Request
             </p>
 
-            <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
-              Request blood donation support
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+              Request blood support
             </h1>
 
             <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-ink-muted">
-              Create a pending blood donation request with recipient, hospital,
-              location, date and message details.
+              Fill in patient, hospital, location, date and message details.
+              Request status will be pending by default.
             </p>
           </div>
-
-          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[24px] bg-primary-tint text-primary">
-            <span className="material-symbols-rounded text-4xl">
-              assignment_add
-            </span>
-          </span>
         </div>
       </div>
-
-      {isBlocked ? (
-        <div className="sc-card border-red-100 bg-red-50 p-6">
-          <div className="flex items-start gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-white text-state-danger">
-              <span className="material-symbols-rounded">block</span>
-            </span>
-
-            <div>
-              <h2 className="text-xl font-extrabold tracking-tight text-ink">
-                Account Blocked
-              </h2>
-
-              <p className="mt-2 text-sm font-semibold leading-6 text-ink-muted">
-                Your account is currently blocked. You cannot create donation
-                requests until an admin changes your status to active.
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       <form
         onSubmit={handleSubmit(handleCreateRequest)}
@@ -139,9 +149,9 @@ const CreateDonationRequest = () => {
             <label className="sc-label">Requester Name</label>
             <input
               type="text"
-              value={requesterName}
               readOnly
               className="sc-input mt-2 bg-surface-soft"
+              {...register("requesterName")}
             />
           </div>
 
@@ -149,9 +159,9 @@ const CreateDonationRequest = () => {
             <label className="sc-label">Requester Email</label>
             <input
               type="email"
-              value={requesterEmail}
               readOnly
               className="sc-input mt-2 bg-surface-soft"
+              {...register("requesterEmail")}
             />
           </div>
 
@@ -203,6 +213,7 @@ const CreateDonationRequest = () => {
               <option value="">
                 {locationLoading ? "Loading districts..." : "Select district"}
               </option>
+
               {districts.map((district) => (
                 <option key={district.id} value={district.name}>
                   {district.name}
@@ -228,6 +239,7 @@ const CreateDonationRequest = () => {
                   ? "Select upazila"
                   : "Select district first"}
               </option>
+
               {upazilaOptions.map((upazila) => (
                 <option key={upazila.id} value={upazila.name}>
                   {upazila.name}
@@ -244,7 +256,7 @@ const CreateDonationRequest = () => {
             <input
               type="text"
               className="sc-input mt-2"
-              placeholder="Dhaka Medical College Hospital"
+              placeholder="Enter hospital name"
               {...register("hospitalName", {
                 required: "Hospital name is required.",
               })}
@@ -259,7 +271,7 @@ const CreateDonationRequest = () => {
             <input
               type="text"
               className="sc-input mt-2"
-              placeholder="Zahir Raihan Rd, Dhaka"
+              placeholder="Enter full address"
               {...register("fullAddress", {
                 required: "Full address is required.",
               })}
@@ -313,14 +325,20 @@ const CreateDonationRequest = () => {
           </div>
         </div>
 
-        <div className="mt-8 flex justify-end">
+        <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <Link to="/dashboard/my-donation-requests">
+            <Button type="button" variant="secondary">
+              Cancel
+            </Button>
+          </Link>
+
           <button
             type="submit"
-            disabled={isSubmitting || isBlocked}
+            disabled={isSubmitting}
             className="sc-primary-btn px-8 py-3 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <span className="material-symbols-rounded">assignment_add</span>
-            {isSubmitting ? "Creating Request..." : "Request"}
+            <span className="material-symbols-rounded">add_circle</span>
+            {isSubmitting ? "Creating..." : "Create Request"}
           </button>
         </div>
       </form>
